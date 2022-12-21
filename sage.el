@@ -45,6 +45,9 @@
 (defvar sage-review-files-metadata nil)
 (defvar sage-review-file nil)
 (defvar sage-project-root nil)
+(defvar sage-review-file-a nil)
+(defvar sage-review-file-b nil)
+(defvar sage-review-setup-function nil)
 
 ;;;; Functions
 
@@ -59,43 +62,53 @@
                                     (tab-bar-tabs)))))
       (tab-bar-new-tab)
       (tab-bar-rename-tab sage-review-tab)
-      (sage-review-file (seq-elt sage-review-files 0)))))
+      (funcall sage-review-setup-function (seq-elt sage-review-files 0))
+      (sage-review-file))))
 
-(defun sage-review-file (file)
-  "Review FILE."
-  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
-             ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory sage-project-root)
-             (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
+(defun sage-setup-project-file-review (file)
+  "Setup `sage' for project FILE review."
+  (let* ((default-directory sage-project-root)
+         (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
     (setq sage-review-file file)
     (cond ((string-equal "A" (plist-get file-metadata :type))
-           (let ((head sage-review-file)
-                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1")))
-             (ediff-files base head)))
+           (progn
+             (setq sage-review-file-a
+                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"))
+             (setq sage-review-file-a sage-review-file)))
           ((string-equal "D" (plist-get file-metadata :type))
-           (let ((head (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD"))
-                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
+           (progn
+             (setq sage-review-file-a
+                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
                                        (with-temp-buffer
                                          (call-process-shell-command
                                           (format "git show HEAD~1:%s" sage-review-file) nil t)
-                                         (buffer-string)))))
-             (ediff-files base head)))
+                                         (buffer-string))))
+             (setq sage-review-file-b
+                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD"))))
           ((string-prefix-p "R" (plist-get file-metadata :type))
-           (let ((head sage-review-file)
-                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
+           (progn
+             (setq sage-review-file-a sage-review-file)
+             (setq sage-review-file-b
+                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
                                        (with-temp-buffer
                                          (call-process-shell-command
                                           (format "git show HEAD~1:%s" (plist-get file-metadata :base)) nil t)
-                                         (buffer-string)))))
-             (ediff-files base head)))
+                                         (buffer-string))))))
           (t
-           (let ((head sage-review-file)
-                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
+           (progn
+             (setq sage-review-file-a (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
                                        (with-temp-buffer
                                          (call-process-shell-command
                                           (format "git show HEAD~1:%s" sage-review-file) nil t)
-                                         (buffer-string)))))
-             (ediff-files base head))))))
+                                         (buffer-string))))
+             (setq sage-review-file-b sage-review-file))))))
+
+(defun sage-review-file ()
+  "Review file."
+  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
+             ((symbol-function #'ediff-set-keys) #'ignore)
+             (default-directory sage-project-root))
+    (ediff-files sage-review-file-a sage-review-file-b)))
 
 (defun sage-close-review-file ()
   "Close current review file."
@@ -147,7 +160,8 @@
     (if (>= next-index (length sage-review-files))
         (message "No next file")
       (sage-close-review-file)
-      (sage-review-file (seq-elt sage-review-files next-index))
+      (funcall sage-review-setup-function (seq-elt sage-review-files next-index))
+      (sage-review-file)
       (message "Next file"))))
 
 (defun sage-review-previous-file ()
@@ -159,7 +173,8 @@
     (if (< previous-index 0)
         (message "No previous file")
       (sage-close-review-file)
-      (sage-review-file (seq-elt sage-review-files previous-index))
+      (funcall sage-review-setup-function (seq-elt sage-review-files previous-index))
+      (sage-review-file)
       (message "Previous file"))))
 
 (defun sage-review-select-file ()
@@ -177,12 +192,14 @@
               (candidate (completing-read "Select file: " collection nil t))
               (file (cdr (assoc candidate candidates ))))
     (sage-close-review-file)
-    (sage-review-file file)))
+    (funcall sage-review-setup-function file)
+    (sage-review-file)))
 
 (defun sage-review-project ()
   "Review current project."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
+    (setq sage-review-setup-function #'sage-setup-project-file-review)
     (setq sage-project-root default-directory)
     (sage-review-files)
     (sage-start-review)))
