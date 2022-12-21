@@ -105,8 +105,9 @@
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory sage-project-root)
-             (buffer-a (get-buffer-create (format "%s<HEAD~1>" (file-name-nondirectory sage-review-file))))
-             (buffer-b (get-buffer-create (format "%s<HEAD>" (file-name-nondirectory sage-review-file)))))
+             (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata)))
+             (buffer-a (get-buffer-create (format "%s<HEAD~1>" (file-name-nondirectory (plist-get file-metadata :base)))))
+             (buffer-b (get-buffer-create (format "%s<HEAD>" (file-name-nondirectory (plist-get file-metadata :name))))))
     (with-current-buffer buffer-a
         (insert-file-contents sage-review-file-a))
     (with-current-buffer buffer-b
