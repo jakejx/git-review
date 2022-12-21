@@ -104,8 +104,14 @@
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory sage-project-root))
-    (ediff-files sage-review-file-a sage-review-file-b)))
+             (default-directory sage-project-root)
+             (buffer-a (get-buffer-create (format "%s<HEAD~1>" (file-name-nondirectory sage-review-file))))
+             (buffer-b (get-buffer-create (format "%s<HEAD>" (file-name-nondirectory sage-review-file)))))
+    (with-current-buffer buffer-a
+        (insert-file-contents sage-review-file-a))
+    (with-current-buffer buffer-b
+        (insert-file-contents sage-review-file-b))
+    (ediff-buffers buffer-a buffer-b)))
 
 (defun sage-close-review-file ()
   "Close current review file."
@@ -142,6 +148,21 @@
                    files-in-latest-commit))))
 
 ;;;; Commands
+
+(defun sage-review-toggle-highlight ()
+  "Toggle syntax highlighting in review buffers."
+  (interactive)
+  (seq-do (lambda (buffer)
+            (with-current-buffer buffer
+              (if (eq major-mode 'fundamental-mode)
+                  (when-let* ((extension (file-name-extension sage-review-file t))
+                              (mode (thread-last auto-mode-alist
+                                                 (seq-find (lambda (it)
+                                                             (string-match-p (car it) extension)))
+                                                 (cdr))))
+                    (funcall mode))
+                (fundamental-mode))))
+          `(,ediff-buffer-A ,ediff-buffer-B)))
 
 (defun sage-review-quit ()
   "Quit `sage' review."
@@ -223,6 +244,7 @@
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "q") #'sage-review-quit)
     (define-key map (kbd "s") #'sage-review-select-file)
+    (define-key map (kbd "t") #'sage-review-toggle-highlight)
     (define-key map (kbd "n") #'ediff-next-difference)
     (define-key map (kbd "p") #'ediff-previous-difference)
     (define-key map (kbd "]") #'sage-review-next-file)
