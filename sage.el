@@ -49,6 +49,8 @@
 (defvar sage-review-file-a nil)
 (defvar sage-review-file-b nil)
 (defvar sage-review-setup-function nil)
+(defvar sage-review-base nil)
+(defvar sage-review-commit nil)
 
 ;;;; Functions
 
@@ -82,7 +84,7 @@
              (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
              (with-temp-file sage-review-file-a
                (call-process-shell-command
-                (format "git show HEAD~1:%s" sage-review-file) nil t))
+                (format "git show %s:%s" sage-review-base sage-review-file) nil t))
              (setq sage-review-file-b (expand-file-name "null" sage-review-temp-dir))
              (with-temp-file sage-review-file-b)))
           ((string-prefix-p "R" (plist-get file-metadata :type))
@@ -91,13 +93,13 @@
              (setq sage-review-file-b (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
              (with-temp-file sage-review-file-b
                (call-process-shell-command
-                (format "git show HEAD~1:%s" (plist-get file-metadata :base)) nil t))))
+                (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))))
           (t
            (progn
              (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
              (with-temp-file sage-review-file-a
                (call-process-shell-command
-                (format "git show HEAD~1:%s" sage-review-file) nil t))
+                (format "git show %s:%s" sage-review-base sage-review-file) nil t))
              (setq sage-review-file-b sage-review-file))))))
 
 (defun sage-review-file ()
@@ -106,8 +108,8 @@
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory sage-project-root)
              (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata)))
-             (buffer-a (get-buffer-create (format "%s<HEAD~1>" (file-name-nondirectory (plist-get file-metadata :base)))))
-             (buffer-b (get-buffer-create (format "%s<HEAD>" (file-name-nondirectory (plist-get file-metadata :name))))))
+             (buffer-a (get-buffer-create (format "%s<%s>" sage-review-base (file-name-nondirectory (plist-get file-metadata :base)))))
+             (buffer-b (get-buffer-create (format "%s<%s>" sage-review-commit (file-name-nondirectory (plist-get file-metadata :name))))))
     (with-current-buffer buffer-a
         (insert-file-contents sage-review-file-a))
     (with-current-buffer buffer-b
@@ -131,7 +133,8 @@
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
-            (shell-command-to-string "git show --pretty=\"\" --name-status HEAD"))
+            (shell-command-to-string
+             (format "git show --pretty=\"\" --name-status %s" sage-review-commit)))
            "\n")))
     (setq sage-review-files
           (seq-map (lambda (it)
@@ -221,6 +224,8 @@
   (let* ((default-directory (project-root (project-current))))
     (setq sage-review-setup-function #'sage-setup-project-file-review)
     (setq sage-project-root default-directory)
+    (setq sage-review-base "HEAD~1")
+    (setq sage-review-commit "HEAD")
     (sage-review-files)
     (sage-start-review)))
 
