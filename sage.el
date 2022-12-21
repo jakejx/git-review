@@ -35,7 +35,6 @@
 ;;;; Requirements
 
 (require 'ediff)
-(require 'vc)
 (require 'tab-bar)
 
 
