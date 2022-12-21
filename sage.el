@@ -138,7 +138,17 @@
 (defun sage-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let ((file (completing-read "Select file: " sage-review-files)))
+  (when-let* ((candidates (sage--review-file-candidates))
+              (metadata `(metadata
+                          (category . sage-file)
+                          (cycle-sort-function . identity)
+                          (display-sort-function . identity)))
+              (collection (lambda (string predicate action)
+                            (if (eq action 'metadata)
+                                metadata
+                              (complete-with-action action candidates string predicate))))
+              (candidate (completing-read "Select file: " collection nil t))
+              (file (cdr (assoc candidate candidates ))))
     (sage-close-review-file)
     (sage-review-file file)))
 
@@ -150,12 +160,25 @@
     (sage-review-files)
     (sage-start-review)))
 
+;;;; Support functions
+
+(defun sage--review-file-candidates ()
+  "Return an alist of review candidates."
+  (thread-last sage-review-files
+               (seq-map-indexed (lambda (it index)
+                                  (let* ((status
+                                          (cdr (assoc it sage-review-files-metadata)))
+                                         (status-str (pcase status
+                                                       ("A" "ADDED"
+                                                        "M" "MODIFIED"))))
+                                    `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
+
 ;;;; Major modes
 
 (defvar sage-review-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "q") #'sage-review-quit)
-    (define-key map (kbd "o") #'sage-review-select-file)
+    (define-key map (kbd "s") #'sage-review-select-file)
     (define-key map (kbd "n") #'ediff-next-difference)
     (define-key map (kbd "p") #'ediff-previous-difference)
     (define-key map (kbd "]") #'sage-review-next-file)
