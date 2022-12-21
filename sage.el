@@ -246,6 +246,47 @@
     (sage-review-files)
     (sage-start-review)))
 
+(defun sage-review-project-branches ()
+  "Review two branches in project."
+  (interactive)
+  (let* ((default-directory (project-root (project-current))))
+    (setq sage-review-setup-function #'sage-setup-project-file-review)
+    (setq sage-project-root default-directory)
+    (setq sage-review-base "main")
+    (setq sage-review-commit "rename_file")
+    (sage-branch-review-files sage-review-base sage-review-commit)
+    (sage-start-review)))
+
+(defun sage-branch-modified-files (branch)
+  "Return a list of modified files in BRANCH."
+  (let ((lines (split-string
+                (with-temp-buffer
+                  (call-process-shell-command
+                   (format "git show --pretty=\"\" --name-status %s" branch)
+                   nil t)
+                  (buffer-string))
+                "\n")))
+    (thread-last lines
+                 (seq-map (lambda (it)
+                            (pcase (split-string it)
+                              (`(,_type ,name) name)
+                              (`(,_type ,old-name ,new-name) `(,old-name ,new-name)))))
+                 (flatten-list))))
+
+(defun sage-branch-review-files (branch-a branch-b)
+  "Set list of files based on BRANCH-A and BRANCH-B."
+  (sage-review-files)
+  ;; Filter review files to only be modified in latest commits on
+  ;; branch-a and branch-b
+  (let* ((files-union
+          (thread-last `(,branch-a ,branch-b)
+                       (seq-map #'sage-branch-modified-files)
+                       (flatten-list))))
+    (setq sage-review-files
+          (seq-filter(lambda (it)
+                       (member it files-union))
+                     sage-review-files))))
+
 ;;;; Support functions
 
 (defun sage--review-file-candidates ()
