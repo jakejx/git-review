@@ -66,14 +66,19 @@
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory sage-project-root))
     (setq sage-review-file file)
-    ;; Check status of file, if added don't use `vc-ediff'
-    (if (not (string-equal "A" (cdr (assoc sage-review-file sage-review-files-metadata))))
-        (vc-version-ediff `(,sage-review-file) "HEAD~1" "HEAD")
-      (let ((head-buffer (get-buffer-create (format "%s.~HEAD~" sage-review-file)))
-            (null-buffer (get-buffer-create (format "%s.~HEAD~1~" sage-review-file))))
-        (with-current-buffer head-buffer
-          (insert-file-contents sage-review-file))
-        (ediff-buffers null-buffer head-buffer)))))
+    (cond ((string-equal "A" (cdr (assoc sage-review-file sage-review-files-metadata)))
+           (let ((head-buffer (get-buffer-create (format "%s.~HEAD~" sage-review-file)))
+                 (base-buffer (get-buffer-create (format "%s.~HEAD~1~" sage-review-file))))
+             (with-current-buffer head-buffer
+               (insert-file-contents sage-review-file))
+             (ediff-buffers base-buffer head-buffer)))
+          ((string-equal "D" (cdr (assoc sage-review-file sage-review-files-metadata)))
+           (let ((head-buffer (get-buffer-create (format "%s.~HEAD~" sage-review-file)))
+                 (base-buffer (get-buffer-create (format "%s.~HEAD~1~" sage-review-file))))
+             (with-current-buffer base-buffer
+               (call-process-shell-command (format "git show HEAD~1:%s" sage-review-file) nil t))
+             (ediff-buffers base-buffer head-buffer)))
+          (t (vc-version-ediff `(,sage-review-file) "HEAD~1" "HEAD")))))
 
 (defun sage-close-review-file ()
   "Close current review file."
