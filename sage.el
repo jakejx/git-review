@@ -74,7 +74,7 @@
     (setq sage-review-file file)
     (cond ((string-equal "A" (plist-get file-metadata :type))
            (progn
-             (setq sage-review-file-a (expand-file-name (file-name-nondirectory "null") sage-review-temp-dir))
+             (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
              (with-temp-file sage-review-file-a)
              (setq sage-review-file-b sage-review-file)))
           ((string-equal "D" (plist-get file-metadata :type))
@@ -83,7 +83,7 @@
              (with-temp-file sage-review-file-a
                (call-process-shell-command
                 (format "git show HEAD~1:%s" sage-review-file) nil t))
-             (setq sage-review-file-b (expand-file-name (file-name-nondirectory "null") sage-review-temp-dir))
+             (setq sage-review-file-b (expand-file-name "null" sage-review-temp-dir))
              (with-temp-file sage-review-file-b)))
           ((string-prefix-p "R" (plist-get file-metadata :type))
            (progn
