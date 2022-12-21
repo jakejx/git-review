@@ -38,6 +38,8 @@
 (require 'vc)
 (require 'tab-bar)
 
+
+
 ;;;; Variables
 
 (defvar sage-review-files nil)
@@ -64,28 +66,37 @@
   "Review FILE."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory sage-project-root))
+             (default-directory sage-project-root)
+             (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
     (setq sage-review-file file)
-    (cond ((string-equal "A" (cdr (assoc sage-review-file sage-review-files-metadata)))
+    (cond ((string-equal "A" (plist-get file-metadata :type))
            (let ((head sage-review-file)
-                 (base (make-temp-file sage-review-file nil "-HEAD~1")))
+                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1")))
              (ediff-files base head)))
-          ((string-equal "D" (cdr (assoc sage-review-file sage-review-files-metadata)))
-           (let ((head (make-temp-file sage-review-file nil "-HEAD"))
-                 (base (make-temp-file sage-review-file nil "-HEAD~1"
+          ((string-equal "D" (plist-get file-metadata :type))
+           (let ((head (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD"))
+                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
                                        (with-temp-buffer
-                                         (call-process-shell-command (format "git show HEAD~1:%s" sage-review-file) nil t)
+                                         (call-process-shell-command
+                                          (format "git show HEAD~1:%s" sage-review-file) nil t)
+                                         (buffer-string)))))
+             (ediff-files base head)))
+          ((string-prefix-p "R" (plist-get file-metadata :type))
+           (let ((head sage-review-file)
+                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
+                                       (with-temp-buffer
+                                         (call-process-shell-command
+                                          (format "git show HEAD~1:%s" (plist-get file-metadata :base)) nil t)
                                          (buffer-string)))))
              (ediff-files base head)))
           (t
-           ;; (vc-version-ediff `(,sage-review-file) "HEAD~1" "HEAD")
-           (let ((head-buffer (get-buffer-create (format "%s.~HEAD~" sage-review-file)))
-                 (base-buffer (get-buffer-create (format "%s.~HEAD~1~" sage-review-file))))
-             (with-current-buffer base-buffer
-               (call-process-shell-command (format "git show HEAD~1:%s" sage-review-file) nil t))
-             (with-current-buffer head-buffer
-               (insert-file-contents sage-review-file))
-             (ediff-buffers base-buffer head-buffer))))))
+           (let ((head sage-review-file)
+                 (base (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
+                                       (with-temp-buffer
+                                         (call-process-shell-command
+                                          (format "git show HEAD~1:%s" sage-review-file) nil t)
+                                         (buffer-string)))))
+             (ediff-files base head))))))
 
 (defun sage-close-review-file ()
   "Close current review file."
@@ -107,12 +118,17 @@
            "\n")))
     (setq sage-review-files
           (seq-map (lambda (it)
-                     (cadr (split-string it)))
+                     (let ((elements (split-string it)))
+                       (pcase elements
+                         (`(,_type ,name) name)
+                         (`(,_type ,_basename ,name) name))))
                    files-in-latest-commit))
     (setq sage-review-files-metadata
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
-                       `(,(cadr elements) . ,(car elements))))
+                       (pcase elements
+                         (`(,type ,name) (cons name `(:type ,type :name ,name :base ,name)))
+                         (`(,type ,basename ,name) (cons name `(:type ,type :name ,name :base ,basename))))))
                    files-in-latest-commit))))
 
 ;;;; Commands
@@ -180,9 +196,11 @@
                (seq-map-indexed (lambda (it index)
                                   (let* ((status
                                           (cdr (assoc it sage-review-files-metadata)))
-                                         (status-str (pcase status
-                                                       ("A" "ADDED"
-                                                        "M" "MODIFIED"))))
+                                         (status-str (pcase (plist-get :type status)
+                                                       ("A" "ADDED")
+                                                       ("D" "DELETED")
+                                                       ("M" "MODIFIED")
+                                                       (_ "RENAMED"))))
                                     `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
 
 ;;;; Major modes
