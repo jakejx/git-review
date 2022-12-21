@@ -48,7 +48,7 @@
 ;;;; Functions
 
 (defun sage-start-review ()
-  "Start review of `sage-review-files'."
+  "Start review of variable `sage-review-files'."
   (let ((sage-review-tab "Sage Review"))
     (when (and sage-review-files
                sage-project-root
