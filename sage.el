@@ -134,7 +134,7 @@
           (split-string
            (string-trim
             (shell-command-to-string
-             (format "git show --pretty=\"\" --name-status %s" sage-review-commit)))
+             (format "git diff --name-status %s..%s" sage-review-base sage-review-commit)))
            "\n")))
     (setq sage-review-files
           (seq-map (lambda (it)
