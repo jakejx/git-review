@@ -45,6 +45,7 @@
 (defvar sage-review-files-metadata nil)
 (defvar sage-review-file nil)
 (defvar sage-project-root nil)
+(defvar sage-review-temp-dir nil)
 (defvar sage-review-file-a nil)
 (defvar sage-review-file-b nil)
 (defvar sage-review-setup-function nil)
@@ -69,38 +70,34 @@
   "Setup `sage' for project FILE review."
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
+    (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
     (setq sage-review-file file)
     (cond ((string-equal "A" (plist-get file-metadata :type))
            (progn
-             (setq sage-review-file-a
-                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"))
-             (setq sage-review-file-a sage-review-file)))
+             (setq sage-review-file-a (expand-file-name (file-name-nondirectory "null") sage-review-temp-dir))
+             (with-temp-file sage-review-file-a)
+             (setq sage-review-file-b sage-review-file)))
           ((string-equal "D" (plist-get file-metadata :type))
            (progn
-             (setq sage-review-file-a
-                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
-                                       (with-temp-buffer
-                                         (call-process-shell-command
-                                          (format "git show HEAD~1:%s" sage-review-file) nil t)
-                                         (buffer-string))))
-             (setq sage-review-file-b
-                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD"))))
+             (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+             (with-temp-file sage-review-file-a
+               (call-process-shell-command
+                (format "git show HEAD~1:%s" sage-review-file) nil t))
+             (setq sage-review-file-b (expand-file-name (file-name-nondirectory "null") sage-review-temp-dir))
+             (with-temp-file sage-review-file-b)))
           ((string-prefix-p "R" (plist-get file-metadata :type))
            (progn
              (setq sage-review-file-a sage-review-file)
-             (setq sage-review-file-b
-                   (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
-                                       (with-temp-buffer
-                                         (call-process-shell-command
-                                          (format "git show HEAD~1:%s" (plist-get file-metadata :base)) nil t)
-                                         (buffer-string))))))
+             (setq sage-review-file-b (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+             (with-temp-file sage-review-file-b
+               (call-process-shell-command
+                (format "git show HEAD~1:%s" (plist-get file-metadata :base)) nil t))))
           (t
            (progn
-             (setq sage-review-file-a (make-temp-file (file-name-nondirectory sage-review-file) nil "-HEAD~1"
-                                       (with-temp-buffer
-                                         (call-process-shell-command
-                                          (format "git show HEAD~1:%s" sage-review-file) nil t)
-                                         (buffer-string))))
+             (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+             (with-temp-file sage-review-file-a
+               (call-process-shell-command
+                (format "git show HEAD~1:%s" sage-review-file) nil t))
              (setq sage-review-file-b sage-review-file))))))
 
 (defun sage-review-file ()
@@ -115,6 +112,7 @@
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (call-interactively #'ediff-quit)
+    (delete-directory sage-review-temp-dir t)
     (seq-do #'kill-buffer buffers)
     (seq-do (lambda (it)
               (when (string-match (rx bol "*" (or "ediff" "Ediff" "Sage")) (buffer-name it))
