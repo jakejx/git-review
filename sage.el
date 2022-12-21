@@ -253,7 +253,7 @@
     (setq sage-review-setup-function #'sage-setup-project-file-review)
     (setq sage-project-root default-directory)
     (setq sage-review-base "main")
-    (setq sage-review-commit "rename_file")
+    (setq sage-review-commit "branch_review")
     (sage-branch-review-files sage-review-base sage-review-commit)
     (sage-start-review)))
 
