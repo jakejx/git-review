@@ -70,10 +70,10 @@
 
 (defun sage-setup-project-file-review (file)
   "Setup `sage' for project FILE review."
+  (setq sage-review-file file)
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
     (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
-    (setq sage-review-file file)
     (cond ((string-equal "A" (plist-get file-metadata :type))
            (progn
              (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
