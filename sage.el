@@ -74,33 +74,43 @@
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
     (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
-    (cond ((string-equal "A" (plist-get file-metadata :type))
-           (progn
-             (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
-             (with-temp-file sage-review-file-a)
-             (setq sage-review-file-b sage-review-file)))
-          ((string-equal "D" (plist-get file-metadata :type))
-           (progn
-             (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-             (with-temp-file sage-review-file-a
-               (call-process-shell-command
-                (format "git show %s:%s" sage-review-base sage-review-file) nil t))
-             (setq sage-review-file-b (expand-file-name "null" sage-review-temp-dir))
-             (with-temp-file sage-review-file-b)))
-          ((string-prefix-p "R" (plist-get file-metadata :type))
-           (progn
-             (setq sage-review-file-a sage-review-file)
-             (setq sage-review-file-b (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-             (with-temp-file sage-review-file-b
-               (call-process-shell-command
-                (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))))
-          (t
-           (progn
-             (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-             (with-temp-file sage-review-file-a
-               (call-process-shell-command
-                (format "git show %s:%s" sage-review-base sage-review-file) nil t))
-             (setq sage-review-file-b sage-review-file))))))
+    ;; Commit message
+    (if (string= sage-review-file "COMMIT_MSG")
+        (progn
+          (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
+          (with-temp-file sage-review-file-a)
+          (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
+          (with-temp-file sage-review-file-b
+            (call-process-shell-command
+             (format "git show --pretty=full --no-patch %s" sage-review-commit) nil t)))
+      ;; Files
+      (cond ((string-equal "A" (plist-get file-metadata :type))
+             (progn
+               (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
+               (with-temp-file sage-review-file-a)
+               (setq sage-review-file-b sage-review-file)))
+            ((string-equal "D" (plist-get file-metadata :type))
+             (progn
+               (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+               (with-temp-file sage-review-file-a
+                 (call-process-shell-command
+                  (format "git show %s:%s" sage-review-base sage-review-file) nil t))
+               (setq sage-review-file-b (expand-file-name "null" sage-review-temp-dir))
+               (with-temp-file sage-review-file-b)))
+            ((string-prefix-p "R" (plist-get file-metadata :type))
+             (progn
+               (setq sage-review-file-a sage-review-file)
+               (setq sage-review-file-b (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+               (with-temp-file sage-review-file-b
+                 (call-process-shell-command
+                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))))
+            (t
+             (progn
+               (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
+               (with-temp-file sage-review-file-a
+                 (call-process-shell-command
+                  (format "git show %s:%s" sage-review-base sage-review-file) nil t))
+               (setq sage-review-file-b sage-review-file)))))))
 
 (defun sage-review-file ()
   "Review file."
@@ -136,6 +146,7 @@
             (shell-command-to-string
              (format "git diff --name-status %s..%s" sage-review-base sage-review-commit)))
            "\n")))
+    (setq files-in-latest-commit `("A COMMIT_MSG" ,@files-in-latest-commit))
     (setq sage-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
