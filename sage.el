@@ -121,9 +121,11 @@
              (buffer-a (get-buffer-create (format "%s<%s>" sage-review-base (file-name-nondirectory (plist-get file-metadata :base)))))
              (buffer-b (get-buffer-create (format "%s<%s>" sage-review-commit (file-name-nondirectory (plist-get file-metadata :name))))))
     (with-current-buffer buffer-a
-        (insert-file-contents sage-review-file-a))
+      (insert-file-contents sage-review-file-a)
+      (sage--review-enable-mode))
     (with-current-buffer buffer-b
-        (insert-file-contents sage-review-file-b))
+      (insert-file-contents sage-review-file-b)
+      (sage--review-enable-mode))
     (ediff-buffers buffer-a buffer-b)))
 
 (defun sage-close-review-file ()
@@ -170,14 +172,18 @@
   (seq-do (lambda (buffer)
             (with-current-buffer buffer
               (if (eq major-mode 'fundamental-mode)
-                  (when-let* ((extension (file-name-extension sage-review-file t))
-                              (mode (thread-last auto-mode-alist
-                                                 (seq-find (lambda (it)
-                                                             (string-match-p (car it) extension)))
-                                                 (cdr))))
-                    (funcall mode))
+                  (sage--review-enable-mode)
                 (fundamental-mode))))
           `(,ediff-buffer-A ,ediff-buffer-B)))
+
+(defun sage--review-enable-mode ()
+  "Enable filename appropriate mode."
+  (when-let* ((extension (file-name-extension sage-review-file t))
+              (mode (thread-last auto-mode-alist
+                                 (seq-find (lambda (it)
+                                             (string-match-p (car it) extension)))
+                                 (cdr))))
+    (funcall mode)))
 
 (defun sage-review-quit ()
   "Quit `sage' review."
