@@ -200,6 +200,22 @@
   (sage-close-review-file)
   (tab-bar-close-tab))
 
+(defun sage-review-next-hunk ()
+  "Go to next hunk."
+  (interactive)
+  ;; TODO(Niklas Eklund, 20221222): Add functionality after
+  ;; `ediff-next-difference' to potentially change highlight if due to
+  ;; rebase
+  (ediff-next-difference))
+
+(defun sage-review-previous-hunk ()
+  "Go to previous hunk."
+  (interactive)
+  ;; TODO(Niklas Eklund, 20221222): Add functionality after
+  ;; `ediff-next-difference' to potentially change highlight if due to
+  ;; rebase
+  (ediff-previous-difference))
+
 (defun sage-review-next-file ()
   "Review next file."
   (interactive)
@@ -319,8 +335,8 @@
     (define-key map (kbd "q") #'sage-review-quit)
     (define-key map (kbd "s") #'sage-review-select-file)
     (define-key map (kbd "t") #'sage-review-toggle-highlight)
-    (define-key map (kbd "n") #'ediff-next-difference)
-    (define-key map (kbd "p") #'ediff-previous-difference)
+    (define-key map (kbd "n") #'sage-review-next-hunk)
+    (define-key map (kbd "p") #'sage-review-previous-hunk)
     (define-key map (kbd "]") #'sage-review-next-file)
     (define-key map (kbd "[") #'sage-review-previous-file)
     map))
