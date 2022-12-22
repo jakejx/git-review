@@ -76,10 +76,19 @@
     (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
     ;; Commit message
     (if (string= sage-review-file "COMMIT_MSG")
-        (progn
-          (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
-          (with-temp-file sage-review-file-a)
-          (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
+        (if (string-equal "A" (plist-get file-metadata :type))
+          (progn
+            (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
+            (with-temp-file sage-review-file-a)
+            (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
+            (with-temp-file sage-review-file-b
+              (call-process-shell-command
+               (format "git show --pretty=full --no-patch %s" sage-review-commit) nil t)))
+          (setq sage-review-file-a (expand-file-name "COMMIT_MSG1" sage-review-temp-dir))
+          (with-temp-file sage-review-file-a
+            (call-process-shell-command
+             (format "git show --pretty=full --no-patch %s" sage-review-base) nil t))
+          (setq sage-review-file-b (expand-file-name "COMMIT_MSG2" sage-review-temp-dir))
           (with-temp-file sage-review-file-b
             (call-process-shell-command
              (format "git show --pretty=full --no-patch %s" sage-review-commit) nil t)))
@@ -140,7 +149,7 @@
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun sage-review-files ()
+(defun sage-review-files (&optional modified-commit)
   "Set the files to review."
   (let* ((files-in-latest-commit
           (split-string
@@ -148,7 +157,7 @@
             (shell-command-to-string
              (format "git diff --name-status %s..%s" sage-review-base sage-review-commit)))
            "\n")))
-    (setq files-in-latest-commit `("A COMMIT_MSG" ,@files-in-latest-commit))
+    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if modified-commit "M" "A")) ,@files-in-latest-commit))
     (setq sage-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
@@ -275,13 +284,14 @@
 
 (defun sage-branch-review-files (branch-a branch-b)
   "Set list of files based on BRANCH-A and BRANCH-B."
-  (sage-review-files)
+  (sage-review-files t)
   ;; Filter review files to only be modified in latest commits on
   ;; branch-a and branch-b
   (let* ((files-union
           (thread-last `(,branch-a ,branch-b)
                        (seq-map #'sage-branch-modified-files)
                        (flatten-list))))
+    (setq files-union `("COMMIT_MSG" ,@files-union))
     (setq sage-review-files
           (seq-filter(lambda (it)
                        (member it files-union))
