@@ -369,6 +369,55 @@
                 sage-review-file sage-review-files :test #'equal))
            (length sage-review-files))))
 
+;;;; WIP
+
+(defun sage-review-hunk-regions (revision file)
+  "Return a list of hunk regions in FILE changed in REVISION."
+  (let* ((diff-command (format "git diff %s:%s %s:%s"
+                               (concat revision "~1") file revision file))
+         (re-hunk-header (rx bol "@@ -"
+                             (group (one-or-more digit) "," (one-or-more digit))
+                             " +"
+                             (group (one-or-more digit) "," (one-or-more digit))
+                             " @@"))
+         (hunk-regions-a)
+         (hunk-regions-b))
+    (with-temp-buffer
+      (call-process-shell-command diff-command nil t)
+      (setq test (buffer-string))
+      (goto-char (point-min))
+      (while (search-forward-regexp re-hunk-header nil t)
+        (let ((a-hunk (match-string 1))
+              (b-hunk (match-string 2)))
+          (push (sage--parse-review-hunk a-hunk) hunk-regions-a)
+          (push (sage--parse-review-hunk b-hunk) hunk-regions-b))))
+    `((a . ,hunk-regions-a)
+      (b . ,hunk-regions-b))))
+
+(defun sage--parse-review-hunk (hunk)
+  "Parse HUNK."
+  (pcase-let ((`(,start ,length)
+               (seq-map #'string-to-number (string-split hunk ","))))
+    `(:begin ,start :end ,(+ start length))))
+
+(defun sage--location-intersect-with-hunk-regions-p (location regions)
+  "Return t if LOCATION intersect with REGIONS."
+  (seq-find (lambda (line)
+              (seq-find (lambda (region)
+                          (<= (plist-get region :begin) line (plist-get region :end)))
+                        regions))
+            location))
+
+;; (let* ((default-directory "~/src/emacs-packages/sage/")
+;;        (sage-review-commit "branch_review")
+;;        (sage-review-file "sage.el")
+;;        (hunk-regions
+;;         (sage-review-hunk-regions sage-review-commit sage-review-file))
+;;        (ediff-location '(281 283)))
+;;   (sage--location-intersect-with-hunk-regions-p
+;;    ediff-location
+;;    (alist-get 'a hunk-regions)))
+
 (provide 'sage)
 
 ;;; sage.el ends here
