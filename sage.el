@@ -277,10 +277,30 @@
   (let* ((default-directory (project-root (project-current))))
     (setq sage-review-setup-function #'sage-setup-project-file-review)
     (setq sage-project-root default-directory)
-    (setq sage-review-base "main")
-    (setq sage-review-commit "branch_review")
-    (sage-branch-review-files sage-review-base sage-review-commit)
-    (sage-start-review)))
+    (setq sage-review-base (completing-read "Select base revision: "
+                                            (sage--other-git-branches)))
+    (setq sage-review-commit (sage--current-git-branch))
+    (when (and sage-review-base sage-review-commit)
+      (sage-branch-review-files sage-review-base sage-review-commit)
+      (sage-start-review))))
+
+(defun sage--current-git-branch ()
+  "Return current branch name."
+  (string-trim
+   (with-temp-buffer
+     (call-process-shell-command "git rev-parse --abbrev-ref HEAD" nil t)
+     (buffer-string))))
+
+(defun sage--other-git-branches ()
+  "Return list of other local git branches excluding current."
+  (let ((branches (split-string
+                   (with-temp-buffer
+                     (call-process-shell-command "git branch" nil t)
+                     (buffer-string))
+                   "\n" t)))
+    (thread-last branches
+                 (seq-remove (lambda (it) (string-prefix-p "*" it)))
+                 (seq-map #'string-trim))))
 
 (defun sage-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
