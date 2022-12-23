@@ -52,6 +52,23 @@
 (defvar sage-review-base nil)
 (defvar sage-review-commit nil)
 
+(defvar sage--review-regions nil)
+
+;;;; Faces
+
+(defgroup sage-faces nil
+  "Faces used by `sage'."
+  :group 'sage
+  :group 'faces)
+
+(defface sage-current-rebase-diff
+  '((t :inherit ediff-current-diff-C))
+  "Face used to highlight rebase diff.")
+
+(defface sage-fine-rebase-diff
+  '((t :inherit ediff-fine-diff-C))
+  "Face used to highlight rebase diff.")
+
 ;;;; Functions
 
 (defun sage-start-review ()
@@ -74,6 +91,7 @@
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
     (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
+    (setq sage--review-regions (sage-review-hunk-regions sage-review-commit sage-review-file))
     ;; Commit message
     (if (string= sage-review-file "COMMIT_MSG")
         (if (string-equal "A" (plist-get file-metadata :type))
@@ -203,18 +221,84 @@
 (defun sage-review-next-hunk ()
   "Go to next hunk."
   (interactive)
-  ;; TODO(Niklas Eklund, 20221222): Add functionality after
-  ;; `ediff-next-difference' to potentially change highlight if due to
-  ;; rebase
-  (ediff-next-difference))
+  (sage--restore-overlays)
+  (ediff-next-difference)
+  (when (and
+         (sage--review-rebase-region-p 'a)
+         (sage--review-rebase-region-p 'b))
+    (sage--review-update-overlay 'a)
+    (sage--review-update-overlay 'b)))
+
+(defun sage--restore-overlays ()
+  "Restore altered overlays."
+  (when-let ((overlay ediff-current-diff-overlay-A))
+    (with-current-buffer ediff-buffer-A
+      (let ((overlays (overlays-in (overlay-start overlay)
+                                   (overlay-end overlay))))
+        (thread-last overlays
+                     (seq-filter (lambda (it) (overlay-get it 'face)))
+                     (seq-do (lambda (it)
+                               (pcase (overlay-get it 'face)
+                                 ('sage-current-rebase-diff
+                                  (overlay-put it 'face 'ediff-current-diff-A))
+                                 ('sage-fine-rebase-diff
+                                  (overlay-put it 'face 'ediff-fine-diff-A)))))))))
+  (when-let ((overlay ediff-current-diff-overlay-B))
+    (with-current-buffer ediff-buffer-B
+      (let ((overlays (overlays-in (overlay-start overlay)
+                                   (overlay-end overlay))))
+        (thread-last overlays
+                     (seq-filter (lambda (it) (overlay-get it 'face)))
+                     (seq-do (lambda (it)
+                               (pcase (overlay-get it 'face)
+                                 ('sage-current-rebase-diff
+                                  (overlay-put it 'face 'ediff-current-diff-B))
+                                 ('sage-fine-rebase-diff
+                                  (overlay-put it 'face 'ediff-fine-diff-B))))))))))
+
+(defun sage--review-rebase-region-p (side)
+  "Return t if region in SIDE is based on a rebase."
+  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
+        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A)))
+    (with-current-buffer buffer
+      (when-let ((diff-overlay (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
+                                         (overlays-at (point))))
+                 (start-line (line-number-at-pos (overlay-start diff-overlay)))
+                 (end-line (line-number-at-pos (overlay-end diff-overlay))))
+        (not
+         (sage--location-intersect-with-hunk-regions-p
+          `(,start-line ,end-line)
+          (alist-get side sage--review-regions)))))))
+
+(defun sage--review-update-overlay (side)
+  "Update overlay on SIDE with different faces."
+  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
+        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
+        (diff-fine-face (if (eq side 'b) 'ediff-fine-diff-B 'ediff-fine-diff-A)))
+    (with-current-buffer buffer
+      (when-let* ((diff-overlay
+                   (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
+                             (overlays-at (point)))))
+        (let* ((all-overlays-in-region (overlays-in (overlay-start diff-overlay) (overlay-end diff-overlay)))
+               (diff-fine-overlays
+                (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
+                            all-overlays-in-region)))
+          (progn
+            (overlay-put diff-overlay 'face 'sage-current-rebase-diff)
+            (seq-do (lambda (it)
+                      (overlay-put it 'face 'sage-fine-rebase-diff))
+                    diff-fine-overlays)))))))
 
 (defun sage-review-previous-hunk ()
   "Go to previous hunk."
   (interactive)
-  ;; TODO(Niklas Eklund, 20221222): Add functionality after
-  ;; `ediff-next-difference' to potentially change highlight if due to
-  ;; rebase
-  (ediff-previous-difference))
+  (sage--restore-overlays)
+  (ediff-previous-difference)
+  (when (and
+         (sage--review-rebase-region-p 'a)
+         (sage--review-rebase-region-p 'b))
+    (sage--review-update-overlay 'a)
+    (sage--review-update-overlay 'b)))
 
 (defun sage-review-next-file ()
   "Review next file."
@@ -373,24 +457,26 @@
 
 (defun sage-review-hunk-regions (revision file)
   "Return a list of hunk regions in FILE changed in REVISION."
-  (let* ((diff-command (format "git diff %s:%s %s:%s"
+  (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
                                (concat revision "~1") file revision file))
          (re-hunk-header (rx bol "@@ -"
-                             (group (one-or-more digit) "," (one-or-more digit))
+                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
                              " +"
-                             (group (one-or-more digit) "," (one-or-more digit))
+                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
                              " @@"))
          (hunk-regions-a)
          (hunk-regions-b))
     (with-temp-buffer
       (call-process-shell-command diff-command nil t)
-      (setq test (buffer-string))
       (goto-char (point-min))
+      (setq test-diff (buffer-string))
       (while (search-forward-regexp re-hunk-header nil t)
         (let ((a-hunk (match-string 1))
               (b-hunk (match-string 2)))
-          (push (sage--parse-review-hunk a-hunk) hunk-regions-a)
-          (push (sage--parse-review-hunk b-hunk) hunk-regions-b))))
+          (when-let ((region (sage--parse-review-hunk a-hunk)))
+            (push region  hunk-regions-a))
+          (when-let ((region (sage--parse-review-hunk b-hunk)))
+            (push region  hunk-regions-b)))))
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
 
@@ -398,25 +484,28 @@
   "Parse HUNK."
   (pcase-let ((`(,start ,length)
                (seq-map #'string-to-number (string-split hunk ","))))
-    `(:begin ,start :end ,(+ start length))))
+    (if (or (not length))
+        `(:begin ,start :end ,start)
+      (unless (= length 0)
+        `(:begin ,start :end ,(+ start (1- length)))))))
 
 (defun sage--location-intersect-with-hunk-regions-p (location regions)
   "Return t if LOCATION intersect with REGIONS."
-  (seq-find (lambda (line)
-              (seq-find (lambda (region)
-                          (<= (plist-get region :begin) line (plist-get region :end)))
-                        regions))
-            location))
+  (when regions
+    (seq-find (lambda (line)
+                (seq-find (lambda (region)
+                            (<= (plist-get region :begin) line (plist-get region :end)))
+                          regions))
+              location)))
 
-;; (let* ((default-directory "~/src/emacs-packages/sage/")
-;;        (sage-review-commit "branch_review")
-;;        (sage-review-file "sage.el")
-;;        (hunk-regions
-;;         (sage-review-hunk-regions sage-review-commit sage-review-file))
-;;        (ediff-location '(281 283)))
-;;   (sage--location-intersect-with-hunk-regions-p
-;;    ediff-location
-;;    (alist-get 'a hunk-regions)))
+;; (defun foo ()
+;;   (let* ((default-directory sage-project-root)
+;;          (hunk-regions
+;;           (sage-review-hunk-regions sage-review-commit sage-review-file))
+;;          (ediff-location '(18 18)))
+;;     (sage--location-intersect-with-hunk-regions-p
+;;      ediff-location
+;;      (alist-get 'b hunk-regions))))
 
 (provide 'sage)
 
