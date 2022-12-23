@@ -498,15 +498,6 @@
                           regions))
               location)))
 
-;; (defun foo ()
-;;   (let* ((default-directory sage-project-root)
-;;          (hunk-regions
-;;           (sage-review-hunk-regions sage-review-commit sage-review-file))
-;;          (ediff-location '(18 18)))
-;;     (sage--location-intersect-with-hunk-regions-p
-;;      ediff-location
-;;      (alist-get 'b hunk-regions))))
-
 (provide 'sage)
 
 ;;; sage.el ends here
