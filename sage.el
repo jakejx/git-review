@@ -37,6 +37,13 @@
 (require 'ediff)
 (require 'tab-bar)
 
+;; TODO:
+;; - refer to base-revision and current-revision
+;; - `ediff-review-file-base-revision' and `ediff-review-file-current-revision'
+;; - skip generation of real files, use buffers instead
+;; - rewrite package descript
+;; - rename from `sage' to `ediff-review'
+
 
 
 ;;;; Variables
