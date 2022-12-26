@@ -101,15 +101,15 @@
             (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
             (with-temp-file sage-review-file-b
               (call-process-shell-command
-               (format "git show --pretty=full --no-patch %s" sage-review-commit) nil t)))
+               (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
           (setq sage-review-file-a (expand-file-name "COMMIT_MSG1" sage-review-temp-dir))
           (with-temp-file sage-review-file-a
             (call-process-shell-command
-             (format "git show --pretty=full --no-patch %s" sage-review-base) nil t))
+             (format "git show --pretty=full --stat %s" sage-review-base) nil t))
           (setq sage-review-file-b (expand-file-name "COMMIT_MSG2" sage-review-temp-dir))
           (with-temp-file sage-review-file-b
             (call-process-shell-command
-             (format "git show --pretty=full --no-patch %s" sage-review-commit) nil t)))
+             (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
       ;; Files
       (cond ((string-equal "A" (plist-get file-metadata :type))
              (progn
