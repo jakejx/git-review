@@ -224,8 +224,8 @@
   (sage--restore-overlays)
   (ediff-next-difference)
   (when (and
-         (sage--review-rebase-region-p 'a)
-         (sage--review-rebase-region-p 'b))
+         sage--review-regions
+         (sage--review-rebase-region-p))
     (sage--review-update-overlay 'a)
     (sage--review-update-overlay 'b)))
 
@@ -256,19 +256,20 @@
                                  ('sage-fine-rebase-diff
                                   (overlay-put it 'face 'ediff-fine-diff-B))))))))))
 
-(defun sage--review-rebase-region-p (side)
-  "Return t if region in SIDE is based on a rebase."
-  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
-        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A)))
-    (with-current-buffer buffer
-      (when-let ((diff-overlay (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
-                                         (overlays-at (point))))
-                 (start-line (line-number-at-pos (overlay-start diff-overlay)))
-                 (end-line (line-number-at-pos (overlay-end diff-overlay))))
-        (not
-         (sage--location-intersect-with-hunk-regions-p
-          `(,start-line ,end-line)
-          (alist-get side sage--review-regions)))))))
+(defun sage--review-rebase-region-p ()
+  "Return t if current diff is based on a rebase."
+  (let* ((current-region-fun (lambda (buffer face)
+                               (with-current-buffer buffer
+                                 (when-let ((diff-overlay
+                                             (seq-find (lambda (it) (eq face (overlay-get it 'face)))
+                                                       (overlays-at (point))))
+                                            (start-line (line-number-at-pos (overlay-start diff-overlay)))
+                                            (end-line (line-number-at-pos (overlay-end diff-overlay))))
+                                   (list `(:begin ,start-line :end ,end-line))))))
+         (file-regions
+          `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
+            (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
+    (sage--file-differences-intersect-p file-regions sage--review-regions)))
 
 (defun sage--review-update-overlay (side)
   "Update overlay on SIDE with different faces."
@@ -295,8 +296,8 @@
   (sage--restore-overlays)
   (ediff-previous-difference)
   (when (and
-         (sage--review-rebase-region-p 'a)
-         (sage--review-rebase-region-p 'b))
+         sage--review-regions
+         (sage--review-rebase-region-p))
     (sage--review-update-overlay 'a)
     (sage--review-update-overlay 'b)))
 
@@ -453,8 +454,6 @@
                 sage-review-file sage-review-files :test #'equal))
            (length sage-review-files))))
 
-;;;; WIP
-
 (defun sage-review-hunk-regions (revision file)
   "Return a list of hunk regions in FILE changed in REVISION."
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
@@ -469,7 +468,6 @@
     (with-temp-buffer
       (call-process-shell-command diff-command nil t)
       (goto-char (point-min))
-      (setq test-diff (buffer-string))
       (while (search-forward-regexp re-hunk-header nil t)
         (let ((a-hunk (match-string 1))
               (b-hunk (match-string 2)))
@@ -497,6 +495,28 @@
                             (<= (plist-get region :begin) line (plist-get region :end)))
                           regions))
               location)))
+
+(defun sage--differences-intersect-p (regions1 regions2)
+  "Return t if REGIONS1 intersect REGIONS2."
+  (seq-find (lambda (it)
+              (let ((region1
+                     (number-sequence (plist-get it :begin)
+                                      (plist-get it :end)
+                                      1)))
+                (seq-find (lambda (it)
+                            (let ((region2 (number-sequence (plist-get it :begin)
+                                                            (plist-get it :end)
+                                                            1)))
+                              (seq-intersection region1 region2)))
+                          regions2)))
+            regions1))
+
+(defun sage--file-differences-intersect-p (file-diffs1 file-diffs2)
+  "Return t if FILE-DIFFS1 intersects with FILE-DIFFS2."
+  (or (sage--differences-intersect-p (alist-get 'a file-diffs1)
+                                     (alist-get 'a file-diffs2))
+      (sage--differences-intersect-p (alist-get 'b file-diffs1)
+                                     (alist-get 'b file-diffs2))))
 
 (provide 'sage)
 
