@@ -58,6 +58,8 @@
 (defvar sage-review-setup-function nil)
 (defvar sage-review-base nil)
 (defvar sage-review-commit nil)
+(defvar sage-review-base-revision-buffer nil)
+(defvar sage-review-current-revision-buffer nil)
 
 (defvar sage--review-regions nil)
 
@@ -97,77 +99,68 @@
   (setq sage-review-file file)
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
-    (setq sage-review-temp-dir (make-temp-file "sage-review-" t))
     (setq sage--review-regions (sage-review-hunk-regions sage-review-commit sage-review-file))
-    ;; Commit message
+
+    ;; Setup buffers
+    (setq sage-review-base-revision-buffer
+          (get-buffer-create (format "%s<%s>" sage-review-base
+                                     (file-name-nondirectory (plist-get file-metadata :base)))))
+    (setq sage-review-current-revision-buffer
+          (get-buffer-create (format "%s<%s>" sage-review-commit
+                                     (file-name-nondirectory (plist-get file-metadata :name)))))
+    (with-current-buffer sage-review-base-revision-buffer (erase-buffer))
+    (with-current-buffer sage-review-current-revision-buffer (erase-buffer))
+
     (if (string= sage-review-file "COMMIT_MSG")
-        (if (string-equal "A" (plist-get file-metadata :type))
-            (progn
-              (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
-              (with-temp-file sage-review-file-a)
-              (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
-              (with-temp-file sage-review-file-b
-                (call-process-shell-command
-                 (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
-          (setq sage-review-file-a (expand-file-name "COMMIT_MSG1" sage-review-temp-dir))
-          (with-temp-file sage-review-file-a
-            (call-process-shell-command
-             (format "git show --pretty=full --stat %s" sage-review-base) nil t))
-          (setq sage-review-file-b (expand-file-name "COMMIT_MSG2" sage-review-temp-dir))
-          (with-temp-file sage-review-file-b
+        (progn
+          (when (string-equal "M" (plist-get file-metadata :type))
+            (with-current-buffer sage-review-base-revision-buffer
+              (call-process-shell-command
+               (format "git show --pretty=full --stat %s" sage-review-base) nil t)))
+          (with-current-buffer sage-review-current-revision-buffer
             (call-process-shell-command
              (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
-      ;; Files
       (cond ((string-equal "A" (plist-get file-metadata :type))
-             (progn
-               (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
-               (with-temp-file sage-review-file-a)
-               (setq sage-review-file-b sage-review-file)))
+             (with-current-buffer sage-review-current-revision-buffer
+               (call-process-shell-command
+                (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t)))
             ((string-equal "D" (plist-get file-metadata :type))
-             (progn
-               (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-               (with-temp-file sage-review-file-a
-                 (call-process-shell-command
-                  (format "git show %s:%s" sage-review-base sage-review-file) nil t))
-               (setq sage-review-file-b (expand-file-name "null" sage-review-temp-dir))
-               (with-temp-file sage-review-file-b)))
+             (with-current-buffer sage-review-base-revision-buffer
+               (call-process-shell-command
+                (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t)))
             ((string-prefix-p "R" (plist-get file-metadata :type))
              (progn
-               (setq sage-review-file-a sage-review-file)
-               (setq sage-review-file-b (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-               (with-temp-file sage-review-file-b
+               (with-current-buffer sage-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))))
+                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer sage-review-current-revision-buffer
+                 (call-process-shell-command
+                  (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t))))
             (t
              (progn
-               (setq sage-review-file-a (expand-file-name (file-name-nondirectory sage-review-file) sage-review-temp-dir))
-               (with-temp-file sage-review-file-a
+               (with-current-buffer sage-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-base sage-review-file) nil t))
-               (setq sage-review-file-b sage-review-file)))))))
+                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer sage-review-current-revision-buffer
+                 (call-process-shell-command
+                  (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t))))))))
 
 (defun sage-review-file ()
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory sage-project-root)
-             (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata)))
-             (buffer-a (get-buffer-create (format "%s<%s>" sage-review-base (file-name-nondirectory (plist-get file-metadata :base)))))
-             (buffer-b (get-buffer-create (format "%s<%s>" sage-review-commit (file-name-nondirectory (plist-get file-metadata :name))))))
-    (with-current-buffer buffer-a
-      (insert-file-contents sage-review-file-a)
+             (default-directory sage-project-root))
+    (with-current-buffer sage-review-base-revision-buffer
       (sage--review-enable-mode))
-    (with-current-buffer buffer-b
-      (insert-file-contents sage-review-file-b)
+    (with-current-buffer sage-review-current-revision-buffer
       (sage--review-enable-mode))
-    (ediff-buffers buffer-a buffer-b)))
+    (ediff-buffers sage-review-base-revision-buffer sage-review-current-revision-buffer)))
 
 (defun sage-close-review-file ()
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (call-interactively #'ediff-quit)
-    (delete-directory sage-review-temp-dir t)
     (seq-do #'kill-buffer buffers)
     (seq-do (lambda (it)
               (when (string-match (rx bol "*" (or "ediff" "Ediff" "Sage")) (buffer-name it))
