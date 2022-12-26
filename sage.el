@@ -95,13 +95,13 @@
     ;; Commit message
     (if (string= sage-review-file "COMMIT_MSG")
         (if (string-equal "A" (plist-get file-metadata :type))
-          (progn
-            (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
-            (with-temp-file sage-review-file-a)
-            (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
-            (with-temp-file sage-review-file-b
-              (call-process-shell-command
-               (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
+            (progn
+              (setq sage-review-file-a (expand-file-name "null" sage-review-temp-dir))
+              (with-temp-file sage-review-file-a)
+              (setq sage-review-file-b (expand-file-name "COMMIT_MSG" sage-review-temp-dir))
+              (with-temp-file sage-review-file-b
+                (call-process-shell-command
+                 (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
           (setq sage-review-file-a (expand-file-name "COMMIT_MSG1" sage-review-temp-dir))
           (with-temp-file sage-review-file-a
             (call-process-shell-command
