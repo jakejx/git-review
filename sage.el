@@ -99,7 +99,9 @@
   (setq sage-review-file file)
   (let* ((default-directory sage-project-root)
          (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
-    (setq sage--review-regions (sage-review-hunk-regions sage-review-commit sage-review-file))
+    (setq sage--review-regions (sage-review-hunk-regions
+                                (concat sage-review-commit "~1") sage-review-commit
+                                (plist-get file-metadata :name) (plist-get file-metadata :name)))
 
     ;; Setup buffers
     (setq sage-review-base-revision-buffer
@@ -456,10 +458,10 @@
                 sage-review-file sage-review-files :test #'equal))
            (length sage-review-files))))
 
-(defun sage-review-hunk-regions (revision file)
-  "Return a list of hunk regions in FILE changed in REVISION."
+(defun sage-review-hunk-regions (base-revision current-revision base-file current-file)
+  "TBD"
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
-                               (concat revision "~1") file revision file))
+                               base-revision base-file current-revision current-file))
          (re-hunk-header (rx bol "@@ -"
                              (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
                              " +"
