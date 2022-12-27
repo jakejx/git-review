@@ -197,6 +197,75 @@
                          (`(,type ,basename ,name) (cons name `(:type ,type :name ,name :base ,basename))))))
                    files-in-latest-commit))))
 
+(defun sage-branch-modified-files (branch)
+  "Return a list of modified files in BRANCH."
+  (let ((lines (split-string
+                (with-temp-buffer
+                  (call-process-shell-command
+                   (format "git show --pretty=\"\" --name-status %s" branch)
+                   nil t)
+                  (buffer-string))
+                "\n")))
+    (thread-last lines
+                 (seq-map (lambda (it)
+                            (pcase (split-string it)
+                              (`(,_type ,name) name)
+                              (`(,_type ,old-name ,new-name) `(,old-name ,new-name)))))
+                 (flatten-list))))
+
+(defun sage-branch-review-files (branch-a branch-b)
+  "Set list of files based on BRANCH-A and BRANCH-B."
+  (sage-review-files t)
+  ;; Filter review files to only be modified in latest commits on
+  ;; branch-a and branch-b
+  (let* ((files-union
+          (thread-last `(,branch-a ,branch-b)
+                       (seq-map #'sage-branch-modified-files)
+                       (flatten-list))))
+    (setq files-union `("COMMIT_MSG" ,@files-union))
+    (setq sage-review-files
+          (thread-last sage-review-files
+                       (seq-filter(lambda (it)
+                                    (member it files-union)))
+                       (seq-remove #'sage-review-file-rebased-p)))))
+
+(defun sage-review-hunk-regions (base-revision current-revision base-file current-file)
+  "TBD"
+  (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
+                               base-revision base-file current-revision current-file))
+         (re-hunk-header (rx bol "@@ -"
+                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
+                             " +"
+                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
+                             " @@"))
+         (hunk-regions-a)
+         (hunk-regions-b))
+    (with-temp-buffer
+      (call-process-shell-command diff-command nil t)
+      (goto-char (point-min))
+      (while (search-forward-regexp re-hunk-header nil t)
+        (let ((a-hunk (match-string 1))
+              (b-hunk (match-string 2)))
+          (when-let ((region (sage--parse-review-hunk a-hunk)))
+            (push region  hunk-regions-a))
+          (when-let ((region (sage--parse-review-hunk b-hunk)))
+            (push region  hunk-regions-b)))))
+    `((a . ,hunk-regions-a)
+      (b . ,hunk-regions-b))))
+
+(defun sage-review-file-rebased-p (file)
+  "Return t if FILE is changed due to a rebase."
+  (unless (string= file "COMMIT_MSG")
+    (let* ((base-revision sage-review-base)
+           (current-revision sage-review-commit)
+           (file-metadata (cdr (assoc file sage-review-files-metadata)))
+           (base-revision-filename (plist-get file-metadata :base))
+           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename file))
+           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision file file)))
+      (not
+       (sage--file-differences-intersect-p base-current-regions
+                                           current-regions)))))
+
 ;;;; Commands
 
 (defun sage-review-toggle-highlight ()
@@ -208,15 +277,6 @@
                   (sage--review-enable-mode)
                 (fundamental-mode))))
           `(,ediff-buffer-A ,ediff-buffer-B)))
-
-(defun sage--review-enable-mode ()
-  "Enable filename appropriate mode."
-  (when-let* ((extension (file-name-extension sage-review-file t))
-              (mode (thread-last auto-mode-alist
-                                 (seq-find (lambda (it)
-                                             (string-match-p (car it) extension)))
-                                 (cdr))))
-    (funcall mode)))
 
 (defun sage-review-quit ()
   "Quit `sage' review."
@@ -234,69 +294,6 @@
          (sage--review-rebase-region-p))
     (sage--review-update-overlay 'a)
     (sage--review-update-overlay 'b)))
-
-(defun sage--restore-overlays ()
-  "Restore altered overlays."
-  (when-let ((overlay ediff-current-diff-overlay-A))
-    (with-current-buffer ediff-buffer-A
-      (let ((overlays (overlays-in (overlay-start overlay)
-                                   (overlay-end overlay))))
-        (thread-last overlays
-                     (seq-filter (lambda (it) (overlay-get it 'face)))
-                     (seq-do (lambda (it)
-                               (pcase (overlay-get it 'face)
-                                 ('sage-current-rebase-diff
-                                  (overlay-put it 'face 'ediff-current-diff-A))
-                                 ('sage-fine-rebase-diff
-                                  (overlay-put it 'face 'ediff-fine-diff-A)))))))))
-  (when-let ((overlay ediff-current-diff-overlay-B))
-    (with-current-buffer ediff-buffer-B
-      (let ((overlays (overlays-in (overlay-start overlay)
-                                   (overlay-end overlay))))
-        (thread-last overlays
-                     (seq-filter (lambda (it) (overlay-get it 'face)))
-                     (seq-do (lambda (it)
-                               (pcase (overlay-get it 'face)
-                                 ('sage-current-rebase-diff
-                                  (overlay-put it 'face 'ediff-current-diff-B))
-                                 ('sage-fine-rebase-diff
-                                  (overlay-put it 'face 'ediff-fine-diff-B))))))))))
-
-(defun sage--review-rebase-region-p ()
-  "Return t if current diff is based on a rebase."
-  (unless (string= "COMMIT_MSG" sage-review-file)
-    (let* ((current-region-fun (lambda (buffer face)
-                                 (with-current-buffer buffer
-                                   (when-let ((diff-overlay
-                                               (seq-find (lambda (it) (eq face (overlay-get it 'face)))
-                                                         (overlays-at (point))))
-                                              (start-line (line-number-at-pos (overlay-start diff-overlay)))
-                                              (end-line (line-number-at-pos (overlay-end diff-overlay))))
-                                     (list `(:begin ,start-line :end ,end-line))))))
-           (file-regions
-            `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
-              (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
-      (not
-       (sage--file-differences-intersect-p file-regions sage--review-regions)))))
-
-(defun sage--review-update-overlay (side)
-  "Update overlay on SIDE with different faces."
-  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
-        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
-        (diff-fine-face (if (eq side 'b) 'ediff-fine-diff-B 'ediff-fine-diff-A)))
-    (with-current-buffer buffer
-      (when-let* ((diff-overlay
-                   (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
-                             (overlays-at (point)))))
-        (let* ((all-overlays-in-region (overlays-in (overlay-start diff-overlay) (overlay-end diff-overlay)))
-               (diff-fine-overlays
-                (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
-                            all-overlays-in-region)))
-          (progn
-            (overlay-put diff-overlay 'face 'sage-current-rebase-diff)
-            (seq-do (lambda (it)
-                      (overlay-put it 'face 'sage-fine-rebase-diff))
-                    diff-fine-overlays)))))))
 
 (defun sage-review-previous-hunk ()
   "Go to previous hunk."
@@ -377,57 +374,87 @@
       (sage-branch-review-files sage-review-base sage-review-commit)
       (sage-start-review))))
 
-(defun sage--current-git-branch ()
-  "Return current branch name."
-  (string-trim
-   (with-temp-buffer
-     (call-process-shell-command "git rev-parse --abbrev-ref HEAD" nil t)
-     (buffer-string))))
+(defun sage-review-browse-b ()
+  (interactive)
+  (funcall sage-review-open-in-browser 'b))
 
-(defun sage--other-git-branches ()
-  "Return list of other local git branches excluding current."
-  (let ((branches (split-string
-                   (with-temp-buffer
-                     (call-process-shell-command "git branch" nil t)
-                     (buffer-string))
-                   "\n" t)))
-    (thread-last branches
-                 (seq-remove (lambda (it) (string-prefix-p "*" it)))
-                 (seq-map #'string-trim))))
-
-(defun sage-branch-modified-files (branch)
-  "Return a list of modified files in BRANCH."
-  (let ((lines (split-string
-                (with-temp-buffer
-                  (call-process-shell-command
-                   (format "git show --pretty=\"\" --name-status %s" branch)
-                   nil t)
-                  (buffer-string))
-                "\n")))
-    (thread-last lines
-                 (seq-map (lambda (it)
-                            (pcase (split-string it)
-                              (`(,_type ,name) name)
-                              (`(,_type ,old-name ,new-name) `(,old-name ,new-name)))))
-                 (flatten-list))))
-
-(defun sage-branch-review-files (branch-a branch-b)
-  "Set list of files based on BRANCH-A and BRANCH-B."
-  (sage-review-files t)
-  ;; Filter review files to only be modified in latest commits on
-  ;; branch-a and branch-b
-  (let* ((files-union
-          (thread-last `(,branch-a ,branch-b)
-                       (seq-map #'sage-branch-modified-files)
-                       (flatten-list))))
-    (setq files-union `("COMMIT_MSG" ,@files-union))
-    (setq sage-review-files
-          (thread-last sage-review-files
-                       (seq-filter(lambda (it)
-                                    (member it files-union)))
-                       (seq-remove #'sage-review-file-rebased-p)))))
+(defun sage-review-browse-a ()
+  (interactive)
+  (funcall sage-review-open-in-browser 'a))
 
 ;;;; Support functions
+
+(defun sage--review-enable-mode ()
+  "Enable filename appropriate mode."
+  (when-let* ((extension (file-name-extension sage-review-file t))
+              (mode (thread-last auto-mode-alist
+                                 (seq-find (lambda (it)
+                                             (string-match-p (car it) extension)))
+                                 (cdr))))
+    (funcall mode)))
+
+(defun sage--restore-overlays ()
+  "Restore altered overlays."
+  (when-let ((overlay ediff-current-diff-overlay-A))
+    (with-current-buffer ediff-buffer-A
+      (let ((overlays (overlays-in (overlay-start overlay)
+                                   (overlay-end overlay))))
+        (thread-last overlays
+                     (seq-filter (lambda (it) (overlay-get it 'face)))
+                     (seq-do (lambda (it)
+                               (pcase (overlay-get it 'face)
+                                 ('sage-current-rebase-diff
+                                  (overlay-put it 'face 'ediff-current-diff-A))
+                                 ('sage-fine-rebase-diff
+                                  (overlay-put it 'face 'ediff-fine-diff-A)))))))))
+  (when-let ((overlay ediff-current-diff-overlay-B))
+    (with-current-buffer ediff-buffer-B
+      (let ((overlays (overlays-in (overlay-start overlay)
+                                   (overlay-end overlay))))
+        (thread-last overlays
+                     (seq-filter (lambda (it) (overlay-get it 'face)))
+                     (seq-do (lambda (it)
+                               (pcase (overlay-get it 'face)
+                                 ('sage-current-rebase-diff
+                                  (overlay-put it 'face 'ediff-current-diff-B))
+                                 ('sage-fine-rebase-diff
+                                  (overlay-put it 'face 'ediff-fine-diff-B))))))))))
+
+(defun sage--review-rebase-region-p ()
+  "Return t if current diff is based on a rebase."
+  (unless (string= "COMMIT_MSG" sage-review-file)
+    (let* ((current-region-fun (lambda (buffer face)
+                                 (with-current-buffer buffer
+                                   (when-let ((diff-overlay
+                                               (seq-find (lambda (it) (eq face (overlay-get it 'face)))
+                                                         (overlays-at (point))))
+                                              (start-line (line-number-at-pos (overlay-start diff-overlay)))
+                                              (end-line (line-number-at-pos (overlay-end diff-overlay))))
+                                     (list `(:begin ,start-line :end ,end-line))))))
+           (file-regions
+            `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
+              (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
+      (not
+       (sage--file-differences-intersect-p file-regions sage--review-regions)))))
+
+(defun sage--review-update-overlay (side)
+  "Update overlay on SIDE with different faces."
+  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
+        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
+        (diff-fine-face (if (eq side 'b) 'ediff-fine-diff-B 'ediff-fine-diff-A)))
+    (with-current-buffer buffer
+      (when-let* ((diff-overlay
+                   (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
+                             (overlays-at (point)))))
+        (let* ((all-overlays-in-region (overlays-in (overlay-start diff-overlay) (overlay-end diff-overlay)))
+               (diff-fine-overlays
+                (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
+                            all-overlays-in-region)))
+          (progn
+            (overlay-put diff-overlay 'face 'sage-current-rebase-diff)
+            (seq-do (lambda (it)
+                      (overlay-put it 'face 'sage-fine-rebase-diff))
+                    diff-fine-overlays)))))))
 
 (defun sage--review-file-candidates ()
   "Return an alist of review candidates."
@@ -441,76 +468,6 @@
                                                        ("M" "MODIFIED")
                                                        (_ "RENAMED"))))
                                     `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
-
-;;;; Major modes
-
-(defvar sage-review-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "b a") #'sage-review-browse-a)
-    (define-key map (kbd "b b") #'sage-review-browse-b)
-    (define-key map (kbd "q") #'sage-review-quit)
-    (define-key map (kbd "s") #'sage-review-select-file)
-    (define-key map (kbd "t") #'sage-review-toggle-highlight)
-    (define-key map (kbd "n") #'sage-review-next-hunk)
-    (define-key map (kbd "p") #'sage-review-previous-hunk)
-    (define-key map (kbd "]") #'sage-review-next-file)
-    (define-key map (kbd "[") #'sage-review-previous-file)
-    map))
-
-(define-derived-mode sage-review-mode fundamental-mode "Sage Review"
-  (read-only-mode)
-  (rename-buffer
-   (format "*Sage Review: [%s/%s]"
-           (1+ (cl-position
-                sage-review-file sage-review-files :test #'equal))
-           (length sage-review-files))))
-
-;;;; WIP
-
-(defun sage-review-browse-b ()
-  (interactive)
-  (funcall sage-review-open-in-browser 'b))
-
-(defun sage-review-browse-a ()
-  (interactive)
-  (funcall sage-review-open-in-browser 'a))
-
-(defun sage-review-hunk-regions (base-revision current-revision base-file current-file)
-  "TBD"
-  (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
-                               base-revision base-file current-revision current-file))
-         (re-hunk-header (rx bol "@@ -"
-                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
-                             " +"
-                             (group (one-or-more digit) (zero-or-one "," (one-or-more digit)))
-                             " @@"))
-         (hunk-regions-a)
-         (hunk-regions-b))
-    (with-temp-buffer
-      (call-process-shell-command diff-command nil t)
-      (goto-char (point-min))
-      (while (search-forward-regexp re-hunk-header nil t)
-        (let ((a-hunk (match-string 1))
-              (b-hunk (match-string 2)))
-          (when-let ((region (sage--parse-review-hunk a-hunk)))
-            (push region  hunk-regions-a))
-          (when-let ((region (sage--parse-review-hunk b-hunk)))
-            (push region  hunk-regions-b)))))
-    `((a . ,hunk-regions-a)
-      (b . ,hunk-regions-b))))
-
-(defun sage-review-file-rebased-p (file)
-  "Return t if FILE is changed due to a rebase."
-  (unless (string= file "COMMIT_MSG")
-    (let* ((base-revision sage-review-base)
-           (current-revision sage-review-commit)
-           (file-metadata (cdr (assoc file sage-review-files-metadata)))
-           (base-revision-filename (plist-get file-metadata :base))
-           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename file))
-           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision file file)))
-      (not
-       (sage--file-differences-intersect-p base-current-regions
-                                           current-regions)))))
 
 (defun sage--parse-review-hunk (hunk)
   "Parse HUNK."
@@ -551,6 +508,47 @@
                                      (alist-get 'a file-diffs2))
       (sage--differences-intersect-p (alist-get 'b file-diffs1)
                                      (alist-get 'b file-diffs2))))
+
+(defun sage--current-git-branch ()
+  "Return current branch name."
+  (string-trim
+   (with-temp-buffer
+     (call-process-shell-command "git rev-parse --abbrev-ref HEAD" nil t)
+     (buffer-string))))
+
+(defun sage--other-git-branches ()
+  "Return list of other local git branches excluding current."
+  (let ((branches (split-string
+                   (with-temp-buffer
+                     (call-process-shell-command "git branch" nil t)
+                     (buffer-string))
+                   "\n" t)))
+    (thread-last branches
+                 (seq-remove (lambda (it) (string-prefix-p "*" it)))
+                 (seq-map #'string-trim))))
+
+;;;; Major modes
+
+(defvar sage-review-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "b a") #'sage-review-browse-a)
+    (define-key map (kbd "b b") #'sage-review-browse-b)
+    (define-key map (kbd "q") #'sage-review-quit)
+    (define-key map (kbd "s") #'sage-review-select-file)
+    (define-key map (kbd "t") #'sage-review-toggle-highlight)
+    (define-key map (kbd "n") #'sage-review-next-hunk)
+    (define-key map (kbd "p") #'sage-review-previous-hunk)
+    (define-key map (kbd "]") #'sage-review-next-file)
+    (define-key map (kbd "[") #'sage-review-previous-file)
+    map))
+
+(define-derived-mode sage-review-mode fundamental-mode "Sage Review"
+  (read-only-mode)
+  (rename-buffer
+   (format "*Sage Review: [%s/%s]"
+           (1+ (cl-position
+                sage-review-file sage-review-files :test #'equal))
+           (length sage-review-files))))
 
 (provide 'sage)
 
