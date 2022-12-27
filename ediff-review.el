@@ -294,8 +294,7 @@
         (message "No next file")
       (ediff-review-close-review-file)
       (funcall ediff-review-setup-function (seq-elt ediff-review-files next-index))
-      (ediff-review-file)
-      (message "Next file"))))
+      (ediff-review-file))))
 
 (defun ediff-review-previous-file ()
   "Review previous file."
@@ -307,8 +306,7 @@
         (message "No previous file")
       (ediff-review-close-review-file)
       (funcall ediff-review-setup-function (seq-elt ediff-review-files previous-index))
-      (ediff-review-file)
-      (message "Previous file"))))
+      (ediff-review-file))))
 
 (defun ediff-review-select-file ()
   "Select a file to review."
@@ -329,8 +327,8 @@
     (ediff-review-file)))
 
 ;;;###autoload
-(defun ediff-review-change ()
-  "Review current change."
+(defun ediff-review-patchset ()
+  "Review current patch-set."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
