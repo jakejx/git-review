@@ -1,4 +1,4 @@
-;;; ediff-review.el --- Support for reviewing patch sets with Ediff -*- lexical-binding: t; -*-
+;;; ediff-review.el --- Review patch sets with Ediff -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Niklas Eklund
 
