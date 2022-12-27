@@ -362,13 +362,15 @@
       (ediff-review-branch-review-files ediff-review-base ediff-review-commit)
       (ediff-review-start-review))))
 
-(defun ediff-review-browse-b ()
-  (interactive)
-  (funcall ediff-review-open-in-browser 'b))
-
 (defun ediff-review-browse-a ()
+  "Open side a in browser."
   (interactive)
   (funcall ediff-review-open-in-browser 'a))
+
+(defun ediff-review-browse-b ()
+  "Open side b in browser."
+  (interactive)
+  (funcall ediff-review-open-in-browser 'b))
 
 ;;;; Support functions
 
