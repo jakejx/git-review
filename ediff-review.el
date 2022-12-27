@@ -101,8 +101,8 @@
          (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
     (setq ediff-review---regions (ediff-review-hunk-regions (concat ediff-review-commit "~1")
                                                             ediff-review-commit
-                                                            (plist-get file-metadata :name)
-                                                            (plist-get file-metadata :name)))
+                                                            (plist-get file-metadata :current-revision-name)
+                                                            (plist-get file-metadata :current-revision-name)))
     (ediff-review--setup-buffers)
     (if (string= ediff-review-file "COMMIT_MSG")
         (progn
@@ -113,11 +113,11 @@
                                         ediff-review-current-revision-buffer))
       (unless (string-equal "A" (plist-get file-metadata :type))
         (ediff-review--file-content ediff-review-base
-                                    (plist-get file-metadata :base)
+                                    (plist-get file-metadata :base-revision-name)
                                     ediff-review-base-revision-buffer))
       (unless (string-equal "D" (plist-get file-metadata :type))
         (ediff-review--file-content ediff-review-commit
-                                    (plist-get file-metadata :name)
+                                    (plist-get file-metadata :current-revision-name)
                                     ediff-review-current-revision-buffer t)))))
 
 (defun ediff-review-file ()
@@ -145,7 +145,8 @@
 (defun ediff-review-files (&optional commit-message-modified)
   "Set the files to review.
 
-Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patchset to compare to."
+Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is
+another patchset to compare to."
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
@@ -164,8 +165,8 @@ Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patch
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
                        (pcase elements
-                         (`(,type ,name) (cons name `(:type ,type :name ,name :base ,name)))
-                         (`(,type ,basename ,name) (cons name `(:type ,type :name ,name :base ,basename))))))
+                         (`(,type ,name) (cons name `(:type ,type :current-revision-name ,name :base-revision-name ,name)))
+                         (`(,type ,basename ,name) (cons name `(:type ,type :current-revision-name ,name :base-revision-name ,basename))))))
                    files-in-latest-commit))))
 
 (defun ediff-review-branch-modified-files (branch)
@@ -201,7 +202,7 @@ Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patch
                        (seq-remove #'ediff-review-file-rebased-p)))))
 
 (defun ediff-review-hunk-regions (base-revision current-revision base-file current-file)
-  "TBD"
+  "Hunk regions for BASE-REVISION:BASE-FILE and CURRENT-REVISION:CURRENT-FILE."
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
                                base-revision base-file current-revision current-file))
          (re-hunk-header (rx bol "@@ -"
@@ -230,12 +231,12 @@ Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patch
     (let* ((base-revision ediff-review-base)
            (current-revision ediff-review-commit)
            (file-metadata (cdr (assoc file ediff-review-files-metadata)))
-           (base-revision-filename (plist-get file-metadata :base))
+           (base-revision-filename (plist-get file-metadata :base-revision-name))
            (base-current-regions (ediff-review-hunk-regions base-revision current-revision base-revision-filename file))
            (current-regions (ediff-review-hunk-regions (concat current-revision "~1") current-revision file file)))
       (not
        (ediff-review--file-differences-intersect-p base-current-regions
-                                           current-regions)))))
+                                                   current-regions)))))
 
 ;;;; Commands
 
@@ -321,7 +322,7 @@ Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patch
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (setq ediff-review-project-root default-directory)
     (setq ediff-review-base (completing-read "Select base revision: "
-                                            (ediff-review--other-git-branches)))
+                                             (ediff-review--other-git-branches)))
     (setq ediff-review-commit (ediff-review--current-git-branch))
     (when (and ediff-review-base ediff-review-commit)
       (ediff-review-branch-review-files ediff-review-base ediff-review-commit)
@@ -367,10 +368,10 @@ Optionally instruct function to SET-FILENAME."
   (let ((file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
     (setq ediff-review-base-revision-buffer
           (get-buffer-create (format "%s<%s>" ediff-review-base
-                                     (file-name-nondirectory (plist-get file-metadata :base)))))
+                                     (file-name-nondirectory (plist-get file-metadata :base-revision-name)))))
     (setq ediff-review-current-revision-buffer
           (get-buffer-create (format "%s<%s>" ediff-review-commit
-                                     (file-name-nondirectory (plist-get file-metadata :name)))))
+                                     (file-name-nondirectory (plist-get file-metadata :current-revision-name)))))
     (with-current-buffer ediff-review-base-revision-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)))
