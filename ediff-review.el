@@ -99,15 +99,18 @@
   (setq ediff-review-file file)
   (let* ((default-directory ediff-review-project-root)
          (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
-    (setq ediff-review---regions (ediff-review-hunk-regions
-                                  (concat ediff-review-commit "~1") ediff-review-commit
-                                  (plist-get file-metadata :name) (plist-get file-metadata :name)))
+    (setq ediff-review---regions (ediff-review-hunk-regions (concat ediff-review-commit "~1")
+                                                            ediff-review-commit
+                                                            (plist-get file-metadata :name)
+                                                            (plist-get file-metadata :name)))
     (ediff-review--setup-buffers)
     (if (string= ediff-review-file "COMMIT_MSG")
         (progn
           (when (string-equal "M" (plist-get file-metadata :type))
-            (ediff-review--commit-message ediff-review-base ediff-review-base-revision-buffer))
-          (ediff-review--commit-message ediff-review-commit ediff-review-current-revision-buffer))
+            (ediff-review--commit-message ediff-review-base
+                                          ediff-review-base-revision-buffer))
+          (ediff-review--commit-message ediff-review-commit
+                                        ediff-review-current-revision-buffer))
       (unless (string-equal "A" (plist-get file-metadata :type))
         (ediff-review--file-content ediff-review-base
                                     (plist-get file-metadata :base)
@@ -129,21 +132,27 @@
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (call-interactively #'ediff-quit)
-    (seq-do (lambda (it) (with-current-buffer it (set-buffer-modified-p nil) (kill-buffer))) buffers)
+    (seq-do (lambda (it)
+              (with-current-buffer it
+                (set-buffer-modified-p nil)
+                (kill-buffer)))
+            buffers)
     (seq-do (lambda (it)
               (when (string-match (rx bol "*" (or "ediff" "Ediff" "Ediff-Review")) (buffer-name it))
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun ediff-review-files (&optional modified-commit)
-  "Set the files to review."
+(defun ediff-review-files (&optional commit-message-modified)
+  "Set the files to review.
+
+Optionally provide COMMIT-MESSAGE-MODIFIED to signal that there is another patchset to compare to."
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
             (shell-command-to-string
              (format "git diff --name-status %s..%s" ediff-review-base ediff-review-commit)))
            "\n")))
-    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if modified-commit "M" "A")) ,@files-in-latest-commit))
+    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if commit-message-modified "M" "A")) ,@files-in-latest-commit))
     (setq ediff-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
