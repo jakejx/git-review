@@ -263,16 +263,6 @@
 
 ;;;; Commands
 
-(defun ediff-review-toggle-highlight ()
-  "Toggle syntax highlighting in review buffers."
-  (interactive)
-  (seq-do (lambda (buffer)
-            (with-current-buffer buffer
-              (if (eq major-mode 'fundamental-mode)
-                  (ediff-review---enable-mode)
-                (fundamental-mode))))
-          `(,ediff-buffer-A ,ediff-buffer-B)))
-
 (defun ediff-review-quit ()
   "Quit `ediff-review' review."
   (interactive)
@@ -532,7 +522,6 @@
     (define-key map (kbd "b b") #'ediff-review-browse-b)
     (define-key map (kbd "q") #'ediff-review-quit)
     (define-key map (kbd "s") #'ediff-review-select-file)
-    (define-key map (kbd "t") #'ediff-review-toggle-highlight)
     (define-key map (kbd "n") #'ediff-review-next-hunk)
     (define-key map (kbd "p") #'ediff-review-previous-hunk)
     (define-key map (kbd "]") #'ediff-review-next-file)
