@@ -1,4 +1,4 @@
-;;; sage-test.el --- Tests for sage.el -*- lexical-binding: t; -*-
+;;; ediff-review-test.el --- Tests for ediff-review.el -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Niklas Eklund
 
@@ -17,31 +17,31 @@
 
 ;;; Commentary:
 
-;; Tests for `sage'.
+;; Tests for `ediff-review'.
 
 ;;; Code:
 
 ;;;; Requirements
 
 (require 'ert)
-(require 'sage)
+(require 'ediff-review)
 
-(ert-deftest sage-test-test-differences-intersect-p ()
-  (should (sage--differences-intersect-p
+(ert-deftest ediff-review-test-test-differences-intersect-p ()
+  (should (ediff-review--differences-intersect-p
            '((:begin 110 :end 111)
              (:begin 138 :end 140))
            '((:begin 112 :end 114)
              (:begin 139 :end 141))))
 
-  (should (sage--differences-intersect-p
+  (should (ediff-review--differences-intersect-p
            '((:begin 3 :end 8))
            '((:begin 1 :end 2)
              (:begin 5 :end 6))))
 
-  (should (not (sage--differences-intersect-p
+  (should (not (ediff-review--differences-intersect-p
                 '((:begin 18 :end 33))
                 '((:begin 34 :end 40))))))
 
-(provide 'sage-test)
+(provide 'ediff-review-test)
 
-;;; sage-test.el ends here
+;;; ediff-review-test.el ends here

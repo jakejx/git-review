@@ -1,10 +1,10 @@
-;;; sage.el --- Second Attempt at Gerrit for Emacs -*- lexical-binding: t; -*-
+;;; ediff-review.el --- Second Attempt at Gerrit for Emacs -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Niklas Eklund
 
 ;; Author: Niklas Eklund <niklas.eklund@posteo.net>
 ;; Maintainer: Niklas Eklund <niklas.eklund@posteo.net>
-;; URL: https://sr.ht/~niklaseklund/sage.el
+;; URL: https://sr.ht/~niklaseklund/ediff-review.el
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "28.1") (project "0.8.1"))
 ;; Keywords: convenience tools
@@ -41,155 +41,155 @@
 ;; - refer to base-revision and current-revision
 ;; - `ediff-review-file-base-revision' and `ediff-review-file-current-revision'
 ;; - rewrite package description
-;; - rename from `sage' to `ediff-review'
+;; - rename from `ediff-review' to `ediff-review'
 
 
 
 ;;;; Variables
 
-(defcustom sage-review-open-in-browser nil
+(defcustom ediff-review-review-open-in-browser nil
   "Function to open a review location in the browser."
   :type 'symbol
-  :group 'sage)
+  :group 'ediff-review)
 
-(defvar sage-review-files nil)
-(defvar sage-review-files-metadata nil)
-(defvar sage-review-file nil)
-(defvar sage-project-root nil)
-(defvar sage-review-temp-dir nil)
-(defvar sage-review-file-a nil)
-(defvar sage-review-file-b nil)
-(defvar sage-review-setup-function nil)
-(defvar sage-review-base nil)
-(defvar sage-review-commit nil)
-(defvar sage-review-base-revision-buffer nil)
-(defvar sage-review-current-revision-buffer nil)
+(defvar ediff-review-review-files nil)
+(defvar ediff-review-review-files-metadata nil)
+(defvar ediff-review-review-file nil)
+(defvar ediff-review-project-root nil)
+(defvar ediff-review-review-temp-dir nil)
+(defvar ediff-review-review-file-a nil)
+(defvar ediff-review-review-file-b nil)
+(defvar ediff-review-review-setup-function nil)
+(defvar ediff-review-review-base nil)
+(defvar ediff-review-review-commit nil)
+(defvar ediff-review-review-base-revision-buffer nil)
+(defvar ediff-review-review-current-revision-buffer nil)
 
-(defvar sage--review-regions nil)
+(defvar ediff-review--review-regions nil)
 
 ;;;; Faces
 
-(defgroup sage-faces nil
-  "Faces used by `sage'."
-  :group 'sage
+(defgroup ediff-review-faces nil
+  "Faces used by `ediff-review'."
+  :group 'ediff-review
   :group 'faces)
 
-(defface sage-current-rebase-diff
+(defface ediff-review-current-rebase-diff
   '((t :inherit ediff-current-diff-C))
   "Face used to highlight rebase diff.")
 
-(defface sage-fine-rebase-diff
+(defface ediff-review-fine-rebase-diff
   '((t :inherit ediff-fine-diff-C))
   "Face used to highlight rebase diff.")
 
 ;;;; Functions
 
-(defun sage-start-review ()
-  "Start review of variable `sage-review-files'."
-  (let ((sage-review-tab "Sage Review"))
-    (when (and sage-review-files
-               sage-project-root
-               (not (member sage-review-tab
+(defun ediff-review-start-review ()
+  "Start review of variable `ediff-review-review-files'."
+  (let ((ediff-review-review-tab "Ediff-Review Review"))
+    (when (and ediff-review-review-files
+               ediff-review-project-root
+               (not (member ediff-review-review-tab
                             (mapcar (lambda (tab)
                                       (alist-get 'name tab))
                                     (tab-bar-tabs)))))
       (tab-bar-new-tab)
-      (tab-bar-rename-tab sage-review-tab)
-      (funcall sage-review-setup-function (seq-elt sage-review-files 0))
-      (sage-review-file))))
+      (tab-bar-rename-tab ediff-review-review-tab)
+      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files 0))
+      (ediff-review-review-file))))
 
-(defun sage-setup-project-file-review (file)
-  "Setup `sage' for project FILE review."
-  (setq sage-review-file file)
-  (let* ((default-directory sage-project-root)
-         (file-metadata (cdr (assoc sage-review-file sage-review-files-metadata))))
-    (setq sage--review-regions (sage-review-hunk-regions
-                                (concat sage-review-commit "~1") sage-review-commit
+(defun ediff-review-setup-project-file-review (file)
+  "Setup `ediff-review' for project FILE review."
+  (setq ediff-review-review-file file)
+  (let* ((default-directory ediff-review-project-root)
+         (file-metadata (cdr (assoc ediff-review-review-file ediff-review-review-files-metadata))))
+    (setq ediff-review--review-regions (ediff-review-review-hunk-regions
+                                (concat ediff-review-review-commit "~1") ediff-review-review-commit
                                 (plist-get file-metadata :name) (plist-get file-metadata :name)))
 
     ;; Setup buffers
-    (setq sage-review-base-revision-buffer
-          (get-buffer-create (format "%s<%s>" sage-review-base
+    (setq ediff-review-review-base-revision-buffer
+          (get-buffer-create (format "%s<%s>" ediff-review-review-base
                                      (file-name-nondirectory (plist-get file-metadata :base)))))
-    (setq sage-review-current-revision-buffer
-          (get-buffer-create (format "%s<%s>" sage-review-commit
+    (setq ediff-review-review-current-revision-buffer
+          (get-buffer-create (format "%s<%s>" ediff-review-review-commit
                                      (file-name-nondirectory (plist-get file-metadata :name)))))
-    (with-current-buffer sage-review-base-revision-buffer (erase-buffer))
-    (with-current-buffer sage-review-current-revision-buffer (erase-buffer))
+    (with-current-buffer ediff-review-review-base-revision-buffer (erase-buffer))
+    (with-current-buffer ediff-review-review-current-revision-buffer (erase-buffer))
 
-    (if (string= sage-review-file "COMMIT_MSG")
+    (if (string= ediff-review-review-file "COMMIT_MSG")
         (progn
           (when (string-equal "M" (plist-get file-metadata :type))
-            (with-current-buffer sage-review-base-revision-buffer
+            (with-current-buffer ediff-review-review-base-revision-buffer
               (call-process-shell-command
-               (format "git show --pretty=full --stat %s" sage-review-base) nil t)))
-          (with-current-buffer sage-review-current-revision-buffer
+               (format "git show --pretty=full --stat %s" ediff-review-review-base) nil t)))
+          (with-current-buffer ediff-review-review-current-revision-buffer
             (call-process-shell-command
-             (format "git show --pretty=full --stat %s" sage-review-commit) nil t)))
+             (format "git show --pretty=full --stat %s" ediff-review-review-commit) nil t)))
       (cond ((string-equal "A" (plist-get file-metadata :type))
-             (with-current-buffer sage-review-current-revision-buffer
+             (with-current-buffer ediff-review-review-current-revision-buffer
                (call-process-shell-command
-                (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t)))
+                (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t)))
             ((string-equal "D" (plist-get file-metadata :type))
-             (with-current-buffer sage-review-base-revision-buffer
+             (with-current-buffer ediff-review-review-base-revision-buffer
                (call-process-shell-command
-                (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t)))
+                (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t)))
             ((string-prefix-p "R" (plist-get file-metadata :type))
              (progn
-               (with-current-buffer sage-review-base-revision-buffer
+               (with-current-buffer ediff-review-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer sage-review-current-revision-buffer
+                  (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer ediff-review-review-current-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t))))
+                  (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t))))
             (t
              (progn
-               (with-current-buffer sage-review-base-revision-buffer
+               (with-current-buffer ediff-review-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer sage-review-current-revision-buffer
+                  (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer ediff-review-review-current-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" sage-review-commit (plist-get file-metadata :name)) nil t))))))))
+                  (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t))))))))
 
-(defun sage-review-file ()
+(defun ediff-review-review-file ()
   "Review file."
-  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (sage-review-mode)))
+  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory sage-project-root))
-    (with-current-buffer sage-review-base-revision-buffer
-      (sage--review-enable-mode))
-    (with-current-buffer sage-review-current-revision-buffer
-      (sage--review-enable-mode))
-    (ediff-buffers sage-review-base-revision-buffer sage-review-current-revision-buffer)))
+             (default-directory ediff-review-project-root))
+    (with-current-buffer ediff-review-review-base-revision-buffer
+      (ediff-review--review-enable-mode))
+    (with-current-buffer ediff-review-review-current-revision-buffer
+      (ediff-review--review-enable-mode))
+    (ediff-buffers ediff-review-review-base-revision-buffer ediff-review-review-current-revision-buffer)))
 
-(defun sage-close-review-file ()
+(defun ediff-review-close-review-file ()
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (call-interactively #'ediff-quit)
     (seq-do #'kill-buffer buffers)
     (seq-do (lambda (it)
-              (when (string-match (rx bol "*" (or "ediff" "Ediff" "Sage")) (buffer-name it))
+              (when (string-match (rx bol "*" (or "ediff" "Ediff" "Ediff-Review")) (buffer-name it))
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun sage-review-files (&optional modified-commit)
+(defun ediff-review-review-files (&optional modified-commit)
   "Set the files to review."
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
             (shell-command-to-string
-             (format "git diff --name-status %s..%s" sage-review-base sage-review-commit)))
+             (format "git diff --name-status %s..%s" ediff-review-review-base ediff-review-review-commit)))
            "\n")))
     (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if modified-commit "M" "A")) ,@files-in-latest-commit))
-    (setq sage-review-files
+    (setq ediff-review-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
                        (pcase elements
                          (`(,_type ,name) name)
                          (`(,_type ,_basename ,name) name))))
                    files-in-latest-commit))
-    (setq sage-review-files-metadata
+    (setq ediff-review-review-files-metadata
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
                        (pcase elements
@@ -197,7 +197,7 @@
                          (`(,type ,basename ,name) (cons name `(:type ,type :name ,name :base ,basename))))))
                    files-in-latest-commit))))
 
-(defun sage-branch-modified-files (branch)
+(defun ediff-review-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
   (let ((lines (split-string
                 (with-temp-buffer
@@ -213,23 +213,23 @@
                               (`(,_type ,old-name ,new-name) `(,old-name ,new-name)))))
                  (flatten-list))))
 
-(defun sage-branch-review-files (branch-a branch-b)
+(defun ediff-review-branch-review-files (branch-a branch-b)
   "Set list of files based on BRANCH-A and BRANCH-B."
-  (sage-review-files t)
+  (ediff-review-review-files t)
   ;; Filter review files to only be modified in latest commits on
   ;; branch-a and branch-b
   (let* ((files-union
           (thread-last `(,branch-a ,branch-b)
-                       (seq-map #'sage-branch-modified-files)
+                       (seq-map #'ediff-review-branch-modified-files)
                        (flatten-list))))
     (setq files-union `("COMMIT_MSG" ,@files-union))
-    (setq sage-review-files
-          (thread-last sage-review-files
+    (setq ediff-review-review-files
+          (thread-last ediff-review-review-files
                        (seq-filter(lambda (it)
                                     (member it files-union)))
-                       (seq-remove #'sage-review-file-rebased-p)))))
+                       (seq-remove #'ediff-review-review-file-rebased-p)))))
 
-(defun sage-review-hunk-regions (base-revision current-revision base-file current-file)
+(defun ediff-review-review-hunk-regions (base-revision current-revision base-file current-file)
   "TBD"
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
                                base-revision base-file current-revision current-file))
@@ -246,98 +246,98 @@
       (while (search-forward-regexp re-hunk-header nil t)
         (let ((a-hunk (match-string 1))
               (b-hunk (match-string 2)))
-          (when-let ((region (sage--parse-review-hunk a-hunk)))
+          (when-let ((region (ediff-review--parse-review-hunk a-hunk)))
             (push region  hunk-regions-a))
-          (when-let ((region (sage--parse-review-hunk b-hunk)))
+          (when-let ((region (ediff-review--parse-review-hunk b-hunk)))
             (push region  hunk-regions-b)))))
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
 
-(defun sage-review-file-rebased-p (file)
+(defun ediff-review-review-file-rebased-p (file)
   "Return t if FILE is changed due to a rebase."
   (unless (string= file "COMMIT_MSG")
-    (let* ((base-revision sage-review-base)
-           (current-revision sage-review-commit)
-           (file-metadata (cdr (assoc file sage-review-files-metadata)))
+    (let* ((base-revision ediff-review-review-base)
+           (current-revision ediff-review-review-commit)
+           (file-metadata (cdr (assoc file ediff-review-review-files-metadata)))
            (base-revision-filename (plist-get file-metadata :base))
-           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename file))
-           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision file file)))
+           (base-current-regions (ediff-review-review-hunk-regions base-revision current-revision base-revision-filename file))
+           (current-regions (ediff-review-review-hunk-regions (concat current-revision "~1") current-revision file file)))
       (not
-       (sage--file-differences-intersect-p base-current-regions
+       (ediff-review--file-differences-intersect-p base-current-regions
                                            current-regions)))))
 
 ;;;; Commands
 
-(defun sage-review-toggle-highlight ()
+(defun ediff-review-review-toggle-highlight ()
   "Toggle syntax highlighting in review buffers."
   (interactive)
   (seq-do (lambda (buffer)
             (with-current-buffer buffer
               (if (eq major-mode 'fundamental-mode)
-                  (sage--review-enable-mode)
+                  (ediff-review--review-enable-mode)
                 (fundamental-mode))))
           `(,ediff-buffer-A ,ediff-buffer-B)))
 
-(defun sage-review-quit ()
-  "Quit `sage' review."
+(defun ediff-review-review-quit ()
+  "Quit `ediff-review' review."
   (interactive)
-  (sage-close-review-file)
+  (ediff-review-close-review-file)
   (tab-bar-close-tab))
 
-(defun sage-review-next-hunk ()
+(defun ediff-review-review-next-hunk ()
   "Go to next hunk."
   (interactive)
-  (sage--restore-overlays)
+  (ediff-review--restore-overlays)
   (ediff-next-difference)
   (when (and
-         sage--review-regions
-         (sage--review-rebase-region-p))
-    (sage--review-update-overlay 'a)
-    (sage--review-update-overlay 'b)))
+         ediff-review--review-regions
+         (ediff-review--review-rebase-region-p))
+    (ediff-review--review-update-overlay 'a)
+    (ediff-review--review-update-overlay 'b)))
 
-(defun sage-review-previous-hunk ()
+(defun ediff-review-review-previous-hunk ()
   "Go to previous hunk."
   (interactive)
-  (sage--restore-overlays)
+  (ediff-review--restore-overlays)
   (ediff-previous-difference)
   (when (and
-         sage--review-regions
-         (sage--review-rebase-region-p))
-    (sage--review-update-overlay 'a)
-    (sage--review-update-overlay 'b)))
+         ediff-review--review-regions
+         (ediff-review--review-rebase-region-p))
+    (ediff-review--review-update-overlay 'a)
+    (ediff-review--review-update-overlay 'b)))
 
-(defun sage-review-next-file ()
+(defun ediff-review-review-next-file ()
   "Review next file."
   (interactive)
   (let* ((current-index (cl-position
-                         sage-review-file sage-review-files :test #'equal))
+                         ediff-review-review-file ediff-review-review-files :test #'equal))
          (next-index (1+ current-index)))
-    (if (>= next-index (length sage-review-files))
-        (message "No next file")
-      (sage-close-review-file)
-      (funcall sage-review-setup-function (seq-elt sage-review-files next-index))
-      (sage-review-file)
-      (message "Next file"))))
+    (if (>= next-index (length ediff-review-review-files))
+        (mesediff-review "No next file")
+      (ediff-review-close-review-file)
+      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files next-index))
+      (ediff-review-review-file)
+      (mesediff-review "Next file"))))
 
-(defun sage-review-previous-file ()
+(defun ediff-review-review-previous-file ()
   "Review previous file."
   (interactive)
   (let* ((current-index (cl-position
-                         sage-review-file sage-review-files :test #'equal))
+                         ediff-review-review-file ediff-review-review-files :test #'equal))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
-        (message "No previous file")
-      (sage-close-review-file)
-      (funcall sage-review-setup-function (seq-elt sage-review-files previous-index))
-      (sage-review-file)
-      (message "Previous file"))))
+        (mesediff-review "No previous file")
+      (ediff-review-close-review-file)
+      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files previous-index))
+      (ediff-review-review-file)
+      (mesediff-review "Previous file"))))
 
-(defun sage-review-select-file ()
+(defun ediff-review-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let* ((candidates (sage--review-file-candidates))
+  (when-let* ((candidates (ediff-review--review-file-candidates))
               (metadata `(metadata
-                          (category . sage-file)
+                          (category . ediff-review-file)
                           (cycle-sort-function . identity)
                           (display-sort-function . identity)))
               (collection (lambda (string predicate action)
@@ -346,54 +346,54 @@
                               (complete-with-action action candidates string predicate))))
               (candidate (completing-read "Select file: " collection nil t))
               (file (cdr (assoc candidate candidates ))))
-    (sage-close-review-file)
-    (funcall sage-review-setup-function file)
-    (sage-review-file)))
+    (ediff-review-close-review-file)
+    (funcall ediff-review-review-setup-function file)
+    (ediff-review-review-file)))
 
-(defun sage-review-project ()
+(defun ediff-review-review-project ()
   "Review current project."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq sage-review-setup-function #'sage-setup-project-file-review)
-    (setq sage-project-root default-directory)
-    (setq sage-review-base "HEAD~1")
-    (setq sage-review-commit "HEAD")
-    (sage-review-files)
-    (sage-start-review)))
+    (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
+    (setq ediff-review-project-root default-directory)
+    (setq ediff-review-review-base "HEAD~1")
+    (setq ediff-review-review-commit "HEAD")
+    (ediff-review-review-files)
+    (ediff-review-start-review)))
 
-(defun sage-review-project-branches ()
+(defun ediff-review-review-project-branches ()
   "Review two branches in project."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq sage-review-setup-function #'sage-setup-project-file-review)
-    (setq sage-project-root default-directory)
-    (setq sage-review-base (completing-read "Select base revision: "
-                                            (sage--other-git-branches)))
-    (setq sage-review-commit (sage--current-git-branch))
-    (when (and sage-review-base sage-review-commit)
-      (sage-branch-review-files sage-review-base sage-review-commit)
-      (sage-start-review))))
+    (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
+    (setq ediff-review-project-root default-directory)
+    (setq ediff-review-review-base (completing-read "Select base revision: "
+                                            (ediff-review--other-git-branches)))
+    (setq ediff-review-review-commit (ediff-review--current-git-branch))
+    (when (and ediff-review-review-base ediff-review-review-commit)
+      (ediff-review-branch-review-files ediff-review-review-base ediff-review-review-commit)
+      (ediff-review-start-review))))
 
-(defun sage-review-browse-b ()
+(defun ediff-review-review-browse-b ()
   (interactive)
-  (funcall sage-review-open-in-browser 'b))
+  (funcall ediff-review-review-open-in-browser 'b))
 
-(defun sage-review-browse-a ()
+(defun ediff-review-review-browse-a ()
   (interactive)
-  (funcall sage-review-open-in-browser 'a))
+  (funcall ediff-review-review-open-in-browser 'a))
 
 ;;;; Support functions
 
-(defun sage--review-enable-mode ()
+(defun ediff-review--review-enable-mode ()
   "Enable filename appropriate mode."
-  (when-let* ((extension (file-name-extension sage-review-file t))
+  (when-let* ((extension (file-name-extension ediff-review-review-file t))
               (mode (thread-last auto-mode-alist
                                  (seq-find (lambda (it)
                                              (string-match-p (car it) extension)))
                                  (cdr))))
     (funcall mode)))
 
-(defun sage--restore-overlays ()
+(defun ediff-review--restore-overlays ()
   "Restore altered overlays."
   (when-let ((overlay ediff-current-diff-overlay-A))
     (with-current-buffer ediff-buffer-A
@@ -403,9 +403,9 @@
                      (seq-filter (lambda (it) (overlay-get it 'face)))
                      (seq-do (lambda (it)
                                (pcase (overlay-get it 'face)
-                                 ('sage-current-rebase-diff
+                                 ('ediff-review-current-rebase-diff
                                   (overlay-put it 'face 'ediff-current-diff-A))
-                                 ('sage-fine-rebase-diff
+                                 ('ediff-review-fine-rebase-diff
                                   (overlay-put it 'face 'ediff-fine-diff-A)))))))))
   (when-let ((overlay ediff-current-diff-overlay-B))
     (with-current-buffer ediff-buffer-B
@@ -415,14 +415,14 @@
                      (seq-filter (lambda (it) (overlay-get it 'face)))
                      (seq-do (lambda (it)
                                (pcase (overlay-get it 'face)
-                                 ('sage-current-rebase-diff
+                                 ('ediff-review-current-rebase-diff
                                   (overlay-put it 'face 'ediff-current-diff-B))
-                                 ('sage-fine-rebase-diff
+                                 ('ediff-review-fine-rebase-diff
                                   (overlay-put it 'face 'ediff-fine-diff-B))))))))))
 
-(defun sage--review-rebase-region-p ()
+(defun ediff-review--review-rebase-region-p ()
   "Return t if current diff is based on a rebase."
-  (unless (string= "COMMIT_MSG" sage-review-file)
+  (unless (string= "COMMIT_MSG" ediff-review-review-file)
     (let* ((current-region-fun (lambda (buffer face)
                                  (with-current-buffer buffer
                                    (when-let ((diff-overlay
@@ -435,9 +435,9 @@
             `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
               (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
       (not
-       (sage--file-differences-intersect-p file-regions sage--review-regions)))))
+       (ediff-review--file-differences-intersect-p file-regions ediff-review--review-regions)))))
 
-(defun sage--review-update-overlay (side)
+(defun ediff-review--review-update-overlay (side)
   "Update overlay on SIDE with different faces."
   (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
         (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
@@ -451,17 +451,17 @@
                 (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
                             all-overlays-in-region)))
           (progn
-            (overlay-put diff-overlay 'face 'sage-current-rebase-diff)
+            (overlay-put diff-overlay 'face 'ediff-review-current-rebase-diff)
             (seq-do (lambda (it)
-                      (overlay-put it 'face 'sage-fine-rebase-diff))
+                      (overlay-put it 'face 'ediff-review-fine-rebase-diff))
                     diff-fine-overlays)))))))
 
-(defun sage--review-file-candidates ()
+(defun ediff-review--review-file-candidates ()
   "Return an alist of review candidates."
-  (thread-last sage-review-files
+  (thread-last ediff-review-review-files
                (seq-map-indexed (lambda (it index)
                                   (let* ((status
-                                          (cdr (assoc it sage-review-files-metadata)))
+                                          (cdr (assoc it ediff-review-review-files-metadata)))
                                          (status-str (pcase (plist-get :type status)
                                                        ("A" "ADDED")
                                                        ("D" "DELETED")
@@ -469,7 +469,7 @@
                                                        (_ "RENAMED"))))
                                     `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
 
-(defun sage--parse-review-hunk (hunk)
+(defun ediff-review--parse-review-hunk (hunk)
   "Parse HUNK."
   (pcase-let ((`(,start ,length)
                (seq-map #'string-to-number (string-split hunk ","))))
@@ -478,7 +478,7 @@
       (unless (= length 0)
         `(:begin ,start :end ,(+ start (1- length)))))))
 
-(defun sage--location-intersect-with-hunk-regions-p (location regions)
+(defun ediff-review--location-intersect-with-hunk-regions-p (location regions)
   "Return t if LOCATION intersect with REGIONS."
   (when regions
     (seq-find (lambda (line)
@@ -487,7 +487,7 @@
                           regions))
               location)))
 
-(defun sage--differences-intersect-p (regions1 regions2)
+(defun ediff-review--differences-intersect-p (regions1 regions2)
   "Return t if REGIONS1 intersect REGIONS2."
   (seq-find (lambda (it)
               (let ((region1
@@ -502,21 +502,21 @@
                           regions2)))
             regions1))
 
-(defun sage--file-differences-intersect-p (file-diffs1 file-diffs2)
+(defun ediff-review--file-differences-intersect-p (file-diffs1 file-diffs2)
   "Return t if FILE-DIFFS1 intersects with FILE-DIFFS2."
-  (or (sage--differences-intersect-p (alist-get 'a file-diffs1)
+  (or (ediff-review--differences-intersect-p (alist-get 'a file-diffs1)
                                      (alist-get 'a file-diffs2))
-      (sage--differences-intersect-p (alist-get 'b file-diffs1)
+      (ediff-review--differences-intersect-p (alist-get 'b file-diffs1)
                                      (alist-get 'b file-diffs2))))
 
-(defun sage--current-git-branch ()
+(defun ediff-review--current-git-branch ()
   "Return current branch name."
   (string-trim
    (with-temp-buffer
      (call-process-shell-command "git rev-parse --abbrev-ref HEAD" nil t)
      (buffer-string))))
 
-(defun sage--other-git-branches ()
+(defun ediff-review--other-git-branches ()
   "Return list of other local git branches excluding current."
   (let ((branches (split-string
                    (with-temp-buffer
@@ -529,27 +529,27 @@
 
 ;;;; Major modes
 
-(defvar sage-review-mode-map
+(defvar ediff-review-review-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "b a") #'sage-review-browse-a)
-    (define-key map (kbd "b b") #'sage-review-browse-b)
-    (define-key map (kbd "q") #'sage-review-quit)
-    (define-key map (kbd "s") #'sage-review-select-file)
-    (define-key map (kbd "t") #'sage-review-toggle-highlight)
-    (define-key map (kbd "n") #'sage-review-next-hunk)
-    (define-key map (kbd "p") #'sage-review-previous-hunk)
-    (define-key map (kbd "]") #'sage-review-next-file)
-    (define-key map (kbd "[") #'sage-review-previous-file)
+    (define-key map (kbd "b a") #'ediff-review-review-browse-a)
+    (define-key map (kbd "b b") #'ediff-review-review-browse-b)
+    (define-key map (kbd "q") #'ediff-review-review-quit)
+    (define-key map (kbd "s") #'ediff-review-review-select-file)
+    (define-key map (kbd "t") #'ediff-review-review-toggle-highlight)
+    (define-key map (kbd "n") #'ediff-review-review-next-hunk)
+    (define-key map (kbd "p") #'ediff-review-review-previous-hunk)
+    (define-key map (kbd "]") #'ediff-review-review-next-file)
+    (define-key map (kbd "[") #'ediff-review-review-previous-file)
     map))
 
-(define-derived-mode sage-review-mode fundamental-mode "Sage Review"
+(define-derived-mode ediff-review-review-mode fundamental-mode "Ediff-Review Review"
   (read-only-mode)
   (rename-buffer
-   (format "*Sage Review: [%s/%s]"
+   (format "*Ediff-Review Review: [%s/%s]"
            (1+ (cl-position
-                sage-review-file sage-review-files :test #'equal))
-           (length sage-review-files))))
+                ediff-review-review-file ediff-review-review-files :test #'equal))
+           (length ediff-review-review-files))))
 
-(provide 'sage)
+(provide 'ediff-review)
 
-;;; sage.el ends here
+;;; ediff-review.el ends here
