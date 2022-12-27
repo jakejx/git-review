@@ -258,19 +258,20 @@
 
 (defun sage--review-rebase-region-p ()
   "Return t if current diff is based on a rebase."
-  (let* ((current-region-fun (lambda (buffer face)
-                               (with-current-buffer buffer
-                                 (when-let ((diff-overlay
-                                             (seq-find (lambda (it) (eq face (overlay-get it 'face)))
-                                                       (overlays-at (point))))
-                                            (start-line (line-number-at-pos (overlay-start diff-overlay)))
-                                            (end-line (line-number-at-pos (overlay-end diff-overlay))))
-                                   (list `(:begin ,start-line :end ,end-line))))))
-         (file-regions
-          `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
-            (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
-    (not
-     (sage--file-differences-intersect-p file-regions sage--review-regions))))
+  (unless (string= "COMMIT_MSG" sage-review-file)
+    (let* ((current-region-fun (lambda (buffer face)
+                                 (with-current-buffer buffer
+                                   (when-let ((diff-overlay
+                                               (seq-find (lambda (it) (eq face (overlay-get it 'face)))
+                                                         (overlays-at (point))))
+                                              (start-line (line-number-at-pos (overlay-start diff-overlay)))
+                                              (end-line (line-number-at-pos (overlay-end diff-overlay))))
+                                     (list `(:begin ,start-line :end ,end-line))))))
+           (file-regions
+            `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
+              (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
+      (not
+       (sage--file-differences-intersect-p file-regions sage--review-regions)))))
 
 (defun sage--review-update-overlay (side)
   "Update overlay on SIDE with different faces."
