@@ -115,17 +115,13 @@
       (unless (string-equal "D" (plist-get file-metadata :type))
         (ediff-review--file-content ediff-review-commit
                                     (plist-get file-metadata :name)
-                                    ediff-review-current-revision-buffer)))))
+                                    ediff-review-current-revision-buffer t)))))
 
 (defun ediff-review-file ()
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory ediff-review-project-root))
-    (with-current-buffer ediff-review-base-revision-buffer
-      (ediff-review---enable-mode))
-    (with-current-buffer ediff-review-current-revision-buffer
-      (ediff-review---enable-mode))
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)))
 
 (defun ediff-review-close-review-file ()
@@ -133,7 +129,7 @@
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (call-interactively #'ediff-quit)
-    (seq-do #'kill-buffer buffers)
+    (seq-do (lambda (it) (with-current-buffer it (set-buffer-modified-p nil) (kill-buffer))) buffers)
     (seq-do (lambda (it)
               (when (string-match (rx bol "*" (or "ediff" "Ediff" "Ediff-Review")) (buffer-name it))
                 (kill-buffer it)))
@@ -334,29 +330,44 @@
 
 ;;;; Support functions
 
-(defun ediff-review--file-content (revision file buffer)
-  "Populate BUFFER with FILE content from REVISION."
+(defun ediff-review--file-content (revision file buffer &optional set-filename)
+  "Populate BUFFER with FILE content from REVISION.
+
+Optionally instruct function to SET-FILENAME."
   (with-current-buffer buffer
-    (call-process-shell-command
-     (format "git show %s:%s" revision file) nil t)))
+    (let ((inhibit-read-only t))
+      (call-process-shell-command
+       (format "git show %s:%s" revision file) nil t)
+      (setq-local default-directory
+                  (file-name-directory (expand-file-name file ediff-review-project-root)))
+      (when set-filename
+        (setq-local buffer-file-name (expand-file-name file ediff-review-project-root)))
+      (ediff-review---enable-mode))
+    (read-only-mode)))
 
 (defun ediff-review--commit-message (revision buffer)
   "Populate BUFFER with commit message from REVISION."
   (with-current-buffer buffer
-    (call-process-shell-command
-     (format "git show --pretty=full --stat %s" revision) nil t)))
+    (let ((inhibit-read-only t))
+      (call-process-shell-command
+       (format "git show --pretty=full --stat %s" revision) nil t))
+    (read-only-mode)))
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
   (let ((file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
     (setq ediff-review-base-revision-buffer
-            (get-buffer-create (format "%s<%s>" ediff-review-base
-                                       (file-name-nondirectory (plist-get file-metadata :base)))))
+          (get-buffer-create (format "%s<%s>" ediff-review-base
+                                     (file-name-nondirectory (plist-get file-metadata :base)))))
     (setq ediff-review-current-revision-buffer
           (get-buffer-create (format "%s<%s>" ediff-review-commit
                                      (file-name-nondirectory (plist-get file-metadata :name)))))
-    (with-current-buffer ediff-review-base-revision-buffer (erase-buffer))
-    (with-current-buffer ediff-review-current-revision-buffer (erase-buffer))))
+    (with-current-buffer ediff-review-base-revision-buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
+    (with-current-buffer ediff-review-current-revision-buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)))))
 
 (defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
@@ -429,11 +440,10 @@
                               (diff-fine-overlays
                                (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
                                            all-overlays-in-region)))
-                         (progn
-                           (overlay-put diff-overlay 'face 'ediff-review-current-rebase-diff)
-                           (seq-do (lambda (it)
-                                     (overlay-put it 'face 'ediff-review-fine-rebase-diff))
-                                   diff-fine-overlays)))))))))
+                         (overlay-put diff-overlay 'face 'ediff-review-current-rebase-diff)
+                         (seq-do (lambda (it)
+                                   (overlay-put it 'face 'ediff-review-fine-rebase-diff))
+                                 diff-fine-overlays))))))))
     (funcall update-overlay-fun 'a)
     (funcall update-overlay-fun 'b)))
 
