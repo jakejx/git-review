@@ -6,7 +6,7 @@
 ;; Maintainer: Niklas Eklund <niklas.eklund@posteo.net>
 ;; URL: https://sr.ht/~niklaseklund/ediff-review.el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "28.1") (project "0.8.1"))
+;; Package-Requires: ((emacs "27.1") (project "0.9.3"))
 ;; Keywords: convenience tools
 
 ;; This file is not part of GNU Emacs.
@@ -33,6 +33,7 @@
 ;;;; Requirements
 
 (require 'ediff)
+(require 'project)
 (require 'tab-bar)
 
 ;; TODO:
