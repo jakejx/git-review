@@ -48,6 +48,9 @@
 
 ;;;; Variables
 
+(defcustom sage-review-open-in-browser nil
+  "Function to open a review location in the browser.")
+
 (defvar sage-review-files nil)
 (defvar sage-review-files-metadata nil)
 (defvar sage-review-file nil)
@@ -442,6 +445,8 @@
 
 (defvar sage-review-mode-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "b a") #'sage-review-browse-a)
+    (define-key map (kbd "b b") #'sage-review-browse-b)
     (define-key map (kbd "q") #'sage-review-quit)
     (define-key map (kbd "s") #'sage-review-select-file)
     (define-key map (kbd "t") #'sage-review-toggle-highlight)
@@ -458,6 +463,16 @@
            (1+ (cl-position
                 sage-review-file sage-review-files :test #'equal))
            (length sage-review-files))))
+
+;;;; WIP
+
+(defun sage-review-browse-b ()
+  (interactive)
+  (funcall sage-review-open-in-browser 'b))
+
+(defun sage-review-browse-a ()
+  (interactive)
+  (funcall sage-review-open-in-browser 'a))
 
 (defun sage-review-hunk-regions (base-revision current-revision base-file current-file)
   "TBD"
