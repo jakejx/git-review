@@ -49,7 +49,9 @@
 ;;;; Variables
 
 (defcustom sage-review-open-in-browser nil
-  "Function to open a review location in the browser.")
+  "Function to open a review location in the browser."
+  :type 'symbol
+  :group 'sage)
 
 (defvar sage-review-files nil)
 (defvar sage-review-files-metadata nil)
