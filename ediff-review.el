@@ -102,16 +102,7 @@
     (setq ediff-review---regions (ediff-review-hunk-regions
                                 (concat ediff-review-commit "~1") ediff-review-commit
                                 (plist-get file-metadata :name) (plist-get file-metadata :name)))
-
-    ;; Setup buffers
-    (setq ediff-review-base-revision-buffer
-          (get-buffer-create (format "%s<%s>" ediff-review-base
-                                     (file-name-nondirectory (plist-get file-metadata :base)))))
-    (setq ediff-review-current-revision-buffer
-          (get-buffer-create (format "%s<%s>" ediff-review-commit
-                                     (file-name-nondirectory (plist-get file-metadata :name)))))
-    (with-current-buffer ediff-review-base-revision-buffer (erase-buffer))
-    (with-current-buffer ediff-review-current-revision-buffer (erase-buffer))
+    (ediff-review--setup-buffers)
 
     (if (string= ediff-review-file "COMMIT_MSG")
         (progn
@@ -363,6 +354,18 @@
   (funcall ediff-review-open-in-browser 'b))
 
 ;;;; Support functions
+
+(defun ediff-review--setup-buffers ()
+  "Setup buffers for `ediff-review'."
+  (let ((file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
+    (setq ediff-review-base-revision-buffer
+            (get-buffer-create (format "%s<%s>" ediff-review-base
+                                       (file-name-nondirectory (plist-get file-metadata :base)))))
+    (setq ediff-review-current-revision-buffer
+          (get-buffer-create (format "%s<%s>" ediff-review-commit
+                                     (file-name-nondirectory (plist-get file-metadata :name)))))
+    (with-current-buffer ediff-review-base-revision-buffer (erase-buffer))
+    (with-current-buffer ediff-review-current-revision-buffer (erase-buffer))))
 
 (defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
