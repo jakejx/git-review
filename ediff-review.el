@@ -1,4 +1,4 @@
-;;; ediff-review.el --- Second Attempt at Gerrit for Emacs -*- lexical-binding: t; -*-
+;;; ediff-review.el --- Support for reviewing patch sets with Ediff -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Niklas Eklund
 
@@ -26,9 +26,7 @@
 
 ;;; Commentary:
 
-;; Second Attempt at Gerrit for Emacs.  This package relies on
-;; available SSH commands to communicate with Gerrit.  This interface
-;; is more limited than the REST API.
+;; This package provides an `ediff' derived interface for reviewing patch sets.
 
 ;;; Code:
 
@@ -40,9 +38,6 @@
 ;; TODO:
 ;; - refer to base-revision and current-revision
 ;; - `ediff-review-file-base-revision' and `ediff-review-file-current-revision'
-;; - rewrite package description
-;; - rename from `ediff-review' to `ediff-review'
-
 
 
 ;;;; Variables
