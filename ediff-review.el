@@ -275,22 +275,14 @@
   (interactive)
   (ediff-review--restore-overlays)
   (ediff-next-difference)
-  (when (and
-         ediff-review---regions
-         (ediff-review---rebase-region-p))
-    (ediff-review---update-overlay 'a)
-    (ediff-review---update-overlay 'b)))
+  (ediff-review---maybe-modify-overlays))
 
 (defun ediff-review-previous-hunk ()
   "Go to previous hunk."
   (interactive)
   (ediff-review--restore-overlays)
   (ediff-previous-difference)
-  (when (and
-         ediff-review---regions
-         (ediff-review---rebase-region-p))
-    (ediff-review---update-overlay 'a)
-    (ediff-review---update-overlay 'b)))
+  (ediff-review---maybe-modify-overlays))
 
 (defun ediff-review-next-file ()
   "Review next file."
@@ -427,27 +419,34 @@
       (not
        (ediff-review--file-differences-intersect-p file-regions ediff-review---regions)))))
 
-(defun ediff-review---update-overlay (side)
-  "Update overlay on SIDE with different faces."
-  (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
-        (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
-        (diff-fine-face (if (eq side 'b) 'ediff-fine-diff-B 'ediff-fine-diff-A)))
-    (with-current-buffer buffer
-      (when-let* ((diff-overlay
-                   (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
-                             (overlays-at (point)))))
-        (let* ((all-overlays-in-region (overlays-in (overlay-start diff-overlay) (overlay-end diff-overlay)))
-               (diff-fine-overlays
-                (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
-                            all-overlays-in-region)))
-          (progn
-            (overlay-put diff-overlay 'face 'ediff-review-current-rebase-diff)
-            (seq-do (lambda (it)
-                      (overlay-put it 'face 'ediff-review-fine-rebase-diff))
-                    diff-fine-overlays)))))))
+(defun ediff-review---maybe-modify-overlays ()
+  "Maybe modify overlays if current diff is due to a rebase."
+  (when-let* ((is-rebase-diff (and
+                               ediff-review---regions
+                               (ediff-review---rebase-region-p)))
+              (update-overlay-fun
+               (lambda (side)
+                 (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
+                       (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
+                       (diff-fine-face (if (eq side 'b) 'ediff-fine-diff-B 'ediff-fine-diff-A)))
+                   (with-current-buffer buffer
+                     (when-let* ((diff-overlay
+                                  (seq-find (lambda (it) (eq diff-face (overlay-get it 'face)))
+                                            (overlays-at (point)))))
+                       (let* ((all-overlays-in-region (overlays-in (overlay-start diff-overlay) (overlay-end diff-overlay)))
+                              (diff-fine-overlays
+                               (seq-filter (lambda (it) (eq diff-fine-face (overlay-get it 'face)))
+                                           all-overlays-in-region)))
+                         (progn
+                           (overlay-put diff-overlay 'face 'ediff-review-current-rebase-diff)
+                           (seq-do (lambda (it)
+                                     (overlay-put it 'face 'ediff-review-fine-rebase-diff))
+                                   diff-fine-overlays)))))))))
+    (funcall update-overlay-fun 'a)
+    (funcall update-overlay-fun 'b)))
 
 (defun ediff-review---file-candidates ()
-  "Return an alist of review candidates."
+  "Return an alist of file candidates."
   (thread-last ediff-review-files
                (seq-map-indexed (lambda (it index)
                                   (let* ((status
@@ -460,7 +459,7 @@
                                     `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
 
 (defun ediff-review--parse-review-hunk (hunk)
-  "Parse HUNK."
+  "Parse HUNK into a property list."
   (pcase-let ((`(,start ,length)
                (seq-map #'string-to-number (string-split hunk ","))))
     (if (or (not length))
@@ -468,16 +467,7 @@
       (unless (= length 0)
         `(:begin ,start :end ,(+ start (1- length)))))))
 
-(defun ediff-review--location-intersect-with-hunk-regions-p (location regions)
-  "Return t if LOCATION intersect with REGIONS."
-  (when regions
-    (seq-find (lambda (line)
-                (seq-find (lambda (region)
-                            (<= (plist-get region :begin) line (plist-get region :end)))
-                          regions))
-              location)))
-
-(defun ediff-review--differences-intersect-p (regions1 regions2)
+(defun ediff-review--diff-regions-intersect-p (regions1 regions2)
   "Return t if REGIONS1 intersect REGIONS2."
   (seq-find (lambda (it)
               (let ((region1
@@ -494,10 +484,10 @@
 
 (defun ediff-review--file-differences-intersect-p (file-diffs1 file-diffs2)
   "Return t if FILE-DIFFS1 intersects with FILE-DIFFS2."
-  (or (ediff-review--differences-intersect-p (alist-get 'a file-diffs1)
-                                     (alist-get 'a file-diffs2))
-      (ediff-review--differences-intersect-p (alist-get 'b file-diffs1)
-                                     (alist-get 'b file-diffs2))))
+  (or (ediff-review--diff-regions-intersect-p (alist-get 'a file-diffs1)
+                                              (alist-get 'a file-diffs2))
+      (ediff-review--diff-regions-intersect-p (alist-get 'b file-diffs1)
+                                              (alist-get 'b file-diffs2))))
 
 (defun ediff-review--current-git-branch ()
   "Return current branch name."
@@ -507,7 +497,7 @@
      (buffer-string))))
 
 (defun ediff-review--other-git-branches ()
-  "Return list of other local git branches excluding current."
+  "Return list of local branch names, excluding the current branch."
   (let ((branches (split-string
                    (with-temp-buffer
                      (call-process-shell-command "git branch" nil t)
