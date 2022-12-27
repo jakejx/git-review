@@ -418,9 +418,10 @@
                        (flatten-list))))
     (setq files-union `("COMMIT_MSG" ,@files-union))
     (setq sage-review-files
-          (seq-filter(lambda (it)
-                       (member it files-union))
-                     sage-review-files))))
+          (thread-last sage-review-files
+                       (seq-filter(lambda (it)
+                                    (member it files-union)))
+                       (seq-remove #'sage-review-file-rebased-p)))))
 
 ;;;; Support functions
 
@@ -481,6 +482,19 @@
             (push region  hunk-regions-b)))))
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
+
+(defun sage-review-file-rebased-p (filename)
+  "Return t if file is rebased."
+  (unless (string= filename "COMMIT_MSG")
+    (let* ((base-revision sage-review-base)
+           (current-revision sage-review-commit)
+           (file-metadata (cdr (assoc filename sage-review-files-metadata)))
+           (base-revision-filename (plist-get file-metadata :base))
+           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename filename))
+           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision filename filename)))
+      (not
+       (sage--file-differences-intersect-p base-current-regions
+                                           current-regions)))))
 
 (defun sage--parse-review-hunk (hunk)
   "Parse HUNK."
