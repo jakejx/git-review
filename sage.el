@@ -40,8 +40,7 @@
 ;; TODO:
 ;; - refer to base-revision and current-revision
 ;; - `ediff-review-file-base-revision' and `ediff-review-file-current-revision'
-;; - skip generation of real files, use buffers instead
-;; - rewrite package descript
+;; - rewrite package description
 ;; - rename from `sage' to `ediff-review'
 
 
@@ -500,15 +499,15 @@
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
 
-(defun sage-review-file-rebased-p (filename)
-  "Return t if file is rebased."
-  (unless (string= filename "COMMIT_MSG")
+(defun sage-review-file-rebased-p (file)
+  "Return t if FILE is changed due to a rebase."
+  (unless (string= file "COMMIT_MSG")
     (let* ((base-revision sage-review-base)
            (current-revision sage-review-commit)
-           (file-metadata (cdr (assoc filename sage-review-files-metadata)))
+           (file-metadata (cdr (assoc file sage-review-files-metadata)))
            (base-revision-filename (plist-get file-metadata :base))
-           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename filename))
-           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision filename filename)))
+           (base-current-regions (sage-review-hunk-regions base-revision current-revision base-revision-filename file))
+           (current-regions (sage-review-hunk-regions (concat current-revision "~1") current-revision file file)))
       (not
        (sage--file-differences-intersect-p base-current-regions
                                            current-regions)))))
