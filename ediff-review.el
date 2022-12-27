@@ -148,7 +148,7 @@
 
 (defun ediff-review-review-file ()
   "Review file."
-  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-review-mode)))
+  (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory ediff-review-project-root))
     (with-current-buffer ediff-review-review-base-revision-buffer
@@ -308,11 +308,11 @@
                          ediff-review-review-file ediff-review-review-files :test #'equal))
          (next-index (1+ current-index)))
     (if (>= next-index (length ediff-review-review-files))
-        (mesediff-review "No next file")
+        (message "No next file")
       (ediff-review-close-review-file)
       (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files next-index))
       (ediff-review-review-file)
-      (mesediff-review "Next file"))))
+      (message "Next file"))))
 
 (defun ediff-review-review-previous-file ()
   "Review previous file."
@@ -321,11 +321,11 @@
                          ediff-review-review-file ediff-review-review-files :test #'equal))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
-        (mesediff-review "No previous file")
+        (message "No previous file")
       (ediff-review-close-review-file)
       (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files previous-index))
       (ediff-review-review-file)
-      (mesediff-review "Previous file"))))
+      (message "Previous file"))))
 
 (defun ediff-review-review-select-file ()
   "Select a file to review."
@@ -345,8 +345,9 @@
     (funcall ediff-review-review-setup-function file)
     (ediff-review-review-file)))
 
-(defun ediff-review-review-project ()
-  "Review current project."
+;;;###autoload
+(defun ediff-review-change ()
+  "Review current change."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
@@ -356,8 +357,9 @@
     (ediff-review-review-files)
     (ediff-review-start-review)))
 
-(defun ediff-review-review-project-branches ()
-  "Review two branches in project."
+;;;###autoload
+(defun ediff-review-patchsets ()
+  "Review the difference between two patch-sets."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
@@ -524,7 +526,7 @@
 
 ;;;; Major modes
 
-(defvar ediff-review-review-mode-map
+(defvar ediff-review-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "b a") #'ediff-review-review-browse-a)
     (define-key map (kbd "b b") #'ediff-review-review-browse-b)
@@ -537,10 +539,10 @@
     (define-key map (kbd "[") #'ediff-review-review-previous-file)
     map))
 
-(define-derived-mode ediff-review-review-mode fundamental-mode "Ediff-Review Review"
+(define-derived-mode ediff-review-mode fundamental-mode "Ediff Review"
   (read-only-mode)
   (rename-buffer
-   (format "*Ediff-Review Review: [%s/%s]"
+   (format "*Ediff Review: [%s/%s]"
            (1+ (cl-position
                 ediff-review-review-file ediff-review-review-files :test #'equal))
            (length ediff-review-review-files))))
