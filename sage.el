@@ -269,7 +269,8 @@
          (file-regions
           `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
             (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
-    (sage--file-differences-intersect-p file-regions sage--review-regions)))
+    (not
+     (sage--file-differences-intersect-p file-regions sage--review-regions))))
 
 (defun sage--review-update-overlay (side)
   "Update overlay on SIDE with different faces."
