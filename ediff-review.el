@@ -100,43 +100,22 @@
   (let* ((default-directory ediff-review-project-root)
          (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
     (setq ediff-review---regions (ediff-review-hunk-regions
-                                (concat ediff-review-commit "~1") ediff-review-commit
-                                (plist-get file-metadata :name) (plist-get file-metadata :name)))
+                                  (concat ediff-review-commit "~1") ediff-review-commit
+                                  (plist-get file-metadata :name) (plist-get file-metadata :name)))
     (ediff-review--setup-buffers)
-
     (if (string= ediff-review-file "COMMIT_MSG")
         (progn
           (when (string-equal "M" (plist-get file-metadata :type))
-            (with-current-buffer ediff-review-base-revision-buffer
-              (call-process-shell-command
-               (format "git show --pretty=full --stat %s" ediff-review-base) nil t)))
-          (with-current-buffer ediff-review-current-revision-buffer
-            (call-process-shell-command
-             (format "git show --pretty=full --stat %s" ediff-review-commit) nil t)))
-      (cond ((string-equal "A" (plist-get file-metadata :type))
-             (with-current-buffer ediff-review-current-revision-buffer
-               (call-process-shell-command
-                (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t)))
-            ((string-equal "D" (plist-get file-metadata :type))
-             (with-current-buffer ediff-review-base-revision-buffer
-               (call-process-shell-command
-                (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t)))
-            ((string-prefix-p "R" (plist-get file-metadata :type))
-             (progn
-               (with-current-buffer ediff-review-base-revision-buffer
-                 (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer ediff-review-current-revision-buffer
-                 (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t))))
-            (t
-             (progn
-               (with-current-buffer ediff-review-base-revision-buffer
-                 (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer ediff-review-current-revision-buffer
-                 (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t))))))))
+            (ediff-review--commit-message ediff-review-base ediff-review-base-revision-buffer))
+          (ediff-review--commit-message ediff-review-commit ediff-review-current-revision-buffer))
+      (unless (string-equal "A" (plist-get file-metadata :type))
+        (ediff-review--file-content ediff-review-base
+                                    (plist-get file-metadata :base)
+                                    ediff-review-base-revision-buffer))
+      (unless (string-equal "D" (plist-get file-metadata :type))
+        (ediff-review--file-content ediff-review-commit
+                                    (plist-get file-metadata :name)
+                                    ediff-review-current-revision-buffer)))))
 
 (defun ediff-review-file ()
   "Review file."
@@ -354,6 +333,18 @@
   (funcall ediff-review-open-in-browser 'b))
 
 ;;;; Support functions
+
+(defun ediff-review--file-content (revision file buffer)
+  "Populate BUFFER with FILE content from REVISION."
+  (with-current-buffer buffer
+    (call-process-shell-command
+     (format "git show %s:%s" revision file) nil t)))
+
+(defun ediff-review--commit-message (revision buffer)
+  "Populate BUFFER with commit message from REVISION."
+  (with-current-buffer buffer
+    (call-process-shell-command
+     (format "git show --pretty=full --stat %s" revision) nil t)))
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
