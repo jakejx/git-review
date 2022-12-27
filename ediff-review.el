@@ -42,25 +42,25 @@
 
 ;;;; Variables
 
-(defcustom ediff-review-review-open-in-browser nil
+(defcustom ediff-review-open-in-browser nil
   "Function to open a review location in the browser."
   :type 'symbol
   :group 'ediff-review)
 
-(defvar ediff-review-review-files nil)
-(defvar ediff-review-review-files-metadata nil)
-(defvar ediff-review-review-file nil)
+(defvar ediff-review-files nil)
+(defvar ediff-review-files-metadata nil)
+(defvar ediff-review-file nil)
 (defvar ediff-review-project-root nil)
-(defvar ediff-review-review-temp-dir nil)
-(defvar ediff-review-review-file-a nil)
-(defvar ediff-review-review-file-b nil)
-(defvar ediff-review-review-setup-function nil)
-(defvar ediff-review-review-base nil)
-(defvar ediff-review-review-commit nil)
-(defvar ediff-review-review-base-revision-buffer nil)
-(defvar ediff-review-review-current-revision-buffer nil)
+(defvar ediff-review-temp-dir nil)
+(defvar ediff-review-file-a nil)
+(defvar ediff-review-file-b nil)
+(defvar ediff-review-setup-function nil)
+(defvar ediff-review-base nil)
+(defvar ediff-review-commit nil)
+(defvar ediff-review-base-revision-buffer nil)
+(defvar ediff-review-current-revision-buffer nil)
 
-(defvar ediff-review--review-regions nil)
+(defvar ediff-review---regions nil)
 
 ;;;; Faces
 
@@ -80,82 +80,82 @@
 ;;;; Functions
 
 (defun ediff-review-start-review ()
-  "Start review of variable `ediff-review-review-files'."
-  (let ((ediff-review-review-tab "Ediff-Review Review"))
-    (when (and ediff-review-review-files
+  "Start review of variable `ediff-review-files'."
+  (let ((ediff-review-tab "Ediff-Review Review"))
+    (when (and ediff-review-files
                ediff-review-project-root
-               (not (member ediff-review-review-tab
+               (not (member ediff-review-tab
                             (mapcar (lambda (tab)
                                       (alist-get 'name tab))
                                     (tab-bar-tabs)))))
       (tab-bar-new-tab)
-      (tab-bar-rename-tab ediff-review-review-tab)
-      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files 0))
-      (ediff-review-review-file))))
+      (tab-bar-rename-tab ediff-review-tab)
+      (funcall ediff-review-setup-function (seq-elt ediff-review-files 0))
+      (ediff-review-file))))
 
 (defun ediff-review-setup-project-file-review (file)
   "Setup `ediff-review' for project FILE review."
-  (setq ediff-review-review-file file)
+  (setq ediff-review-file file)
   (let* ((default-directory ediff-review-project-root)
-         (file-metadata (cdr (assoc ediff-review-review-file ediff-review-review-files-metadata))))
-    (setq ediff-review--review-regions (ediff-review-review-hunk-regions
-                                (concat ediff-review-review-commit "~1") ediff-review-review-commit
+         (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
+    (setq ediff-review---regions (ediff-review-hunk-regions
+                                (concat ediff-review-commit "~1") ediff-review-commit
                                 (plist-get file-metadata :name) (plist-get file-metadata :name)))
 
     ;; Setup buffers
-    (setq ediff-review-review-base-revision-buffer
-          (get-buffer-create (format "%s<%s>" ediff-review-review-base
+    (setq ediff-review-base-revision-buffer
+          (get-buffer-create (format "%s<%s>" ediff-review-base
                                      (file-name-nondirectory (plist-get file-metadata :base)))))
-    (setq ediff-review-review-current-revision-buffer
-          (get-buffer-create (format "%s<%s>" ediff-review-review-commit
+    (setq ediff-review-current-revision-buffer
+          (get-buffer-create (format "%s<%s>" ediff-review-commit
                                      (file-name-nondirectory (plist-get file-metadata :name)))))
-    (with-current-buffer ediff-review-review-base-revision-buffer (erase-buffer))
-    (with-current-buffer ediff-review-review-current-revision-buffer (erase-buffer))
+    (with-current-buffer ediff-review-base-revision-buffer (erase-buffer))
+    (with-current-buffer ediff-review-current-revision-buffer (erase-buffer))
 
-    (if (string= ediff-review-review-file "COMMIT_MSG")
+    (if (string= ediff-review-file "COMMIT_MSG")
         (progn
           (when (string-equal "M" (plist-get file-metadata :type))
-            (with-current-buffer ediff-review-review-base-revision-buffer
+            (with-current-buffer ediff-review-base-revision-buffer
               (call-process-shell-command
-               (format "git show --pretty=full --stat %s" ediff-review-review-base) nil t)))
-          (with-current-buffer ediff-review-review-current-revision-buffer
+               (format "git show --pretty=full --stat %s" ediff-review-base) nil t)))
+          (with-current-buffer ediff-review-current-revision-buffer
             (call-process-shell-command
-             (format "git show --pretty=full --stat %s" ediff-review-review-commit) nil t)))
+             (format "git show --pretty=full --stat %s" ediff-review-commit) nil t)))
       (cond ((string-equal "A" (plist-get file-metadata :type))
-             (with-current-buffer ediff-review-review-current-revision-buffer
+             (with-current-buffer ediff-review-current-revision-buffer
                (call-process-shell-command
-                (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t)))
+                (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t)))
             ((string-equal "D" (plist-get file-metadata :type))
-             (with-current-buffer ediff-review-review-base-revision-buffer
+             (with-current-buffer ediff-review-base-revision-buffer
                (call-process-shell-command
-                (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t)))
+                (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t)))
             ((string-prefix-p "R" (plist-get file-metadata :type))
              (progn
-               (with-current-buffer ediff-review-review-base-revision-buffer
+               (with-current-buffer ediff-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer ediff-review-review-current-revision-buffer
+                  (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer ediff-review-current-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t))))
+                  (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t))))
             (t
              (progn
-               (with-current-buffer ediff-review-review-base-revision-buffer
+               (with-current-buffer ediff-review-base-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-review-base (plist-get file-metadata :base)) nil t))
-               (with-current-buffer ediff-review-review-current-revision-buffer
+                  (format "git show %s:%s" ediff-review-base (plist-get file-metadata :base)) nil t))
+               (with-current-buffer ediff-review-current-revision-buffer
                  (call-process-shell-command
-                  (format "git show %s:%s" ediff-review-review-commit (plist-get file-metadata :name)) nil t))))))))
+                  (format "git show %s:%s" ediff-review-commit (plist-get file-metadata :name)) nil t))))))))
 
-(defun ediff-review-review-file ()
+(defun ediff-review-file ()
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory ediff-review-project-root))
-    (with-current-buffer ediff-review-review-base-revision-buffer
-      (ediff-review--review-enable-mode))
-    (with-current-buffer ediff-review-review-current-revision-buffer
-      (ediff-review--review-enable-mode))
-    (ediff-buffers ediff-review-review-base-revision-buffer ediff-review-review-current-revision-buffer)))
+    (with-current-buffer ediff-review-base-revision-buffer
+      (ediff-review---enable-mode))
+    (with-current-buffer ediff-review-current-revision-buffer
+      (ediff-review---enable-mode))
+    (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)))
 
 (defun ediff-review-close-review-file ()
   "Close current review file."
@@ -168,23 +168,23 @@
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun ediff-review-review-files (&optional modified-commit)
+(defun ediff-review-files (&optional modified-commit)
   "Set the files to review."
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
             (shell-command-to-string
-             (format "git diff --name-status %s..%s" ediff-review-review-base ediff-review-review-commit)))
+             (format "git diff --name-status %s..%s" ediff-review-base ediff-review-commit)))
            "\n")))
     (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if modified-commit "M" "A")) ,@files-in-latest-commit))
-    (setq ediff-review-review-files
+    (setq ediff-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
                        (pcase elements
                          (`(,_type ,name) name)
                          (`(,_type ,_basename ,name) name))))
                    files-in-latest-commit))
-    (setq ediff-review-review-files-metadata
+    (setq ediff-review-files-metadata
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
                        (pcase elements
@@ -210,7 +210,7 @@
 
 (defun ediff-review-branch-review-files (branch-a branch-b)
   "Set list of files based on BRANCH-A and BRANCH-B."
-  (ediff-review-review-files t)
+  (ediff-review-files t)
   ;; Filter review files to only be modified in latest commits on
   ;; branch-a and branch-b
   (let* ((files-union
@@ -218,13 +218,13 @@
                        (seq-map #'ediff-review-branch-modified-files)
                        (flatten-list))))
     (setq files-union `("COMMIT_MSG" ,@files-union))
-    (setq ediff-review-review-files
-          (thread-last ediff-review-review-files
+    (setq ediff-review-files
+          (thread-last ediff-review-files
                        (seq-filter(lambda (it)
                                     (member it files-union)))
-                       (seq-remove #'ediff-review-review-file-rebased-p)))))
+                       (seq-remove #'ediff-review-file-rebased-p)))))
 
-(defun ediff-review-review-hunk-regions (base-revision current-revision base-file current-file)
+(defun ediff-review-hunk-regions (base-revision current-revision base-file current-file)
   "TBD"
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
                                base-revision base-file current-revision current-file))
@@ -248,89 +248,89 @@
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
 
-(defun ediff-review-review-file-rebased-p (file)
+(defun ediff-review-file-rebased-p (file)
   "Return t if FILE is changed due to a rebase."
   (unless (string= file "COMMIT_MSG")
-    (let* ((base-revision ediff-review-review-base)
-           (current-revision ediff-review-review-commit)
-           (file-metadata (cdr (assoc file ediff-review-review-files-metadata)))
+    (let* ((base-revision ediff-review-base)
+           (current-revision ediff-review-commit)
+           (file-metadata (cdr (assoc file ediff-review-files-metadata)))
            (base-revision-filename (plist-get file-metadata :base))
-           (base-current-regions (ediff-review-review-hunk-regions base-revision current-revision base-revision-filename file))
-           (current-regions (ediff-review-review-hunk-regions (concat current-revision "~1") current-revision file file)))
+           (base-current-regions (ediff-review-hunk-regions base-revision current-revision base-revision-filename file))
+           (current-regions (ediff-review-hunk-regions (concat current-revision "~1") current-revision file file)))
       (not
        (ediff-review--file-differences-intersect-p base-current-regions
                                            current-regions)))))
 
 ;;;; Commands
 
-(defun ediff-review-review-toggle-highlight ()
+(defun ediff-review-toggle-highlight ()
   "Toggle syntax highlighting in review buffers."
   (interactive)
   (seq-do (lambda (buffer)
             (with-current-buffer buffer
               (if (eq major-mode 'fundamental-mode)
-                  (ediff-review--review-enable-mode)
+                  (ediff-review---enable-mode)
                 (fundamental-mode))))
           `(,ediff-buffer-A ,ediff-buffer-B)))
 
-(defun ediff-review-review-quit ()
+(defun ediff-review-quit ()
   "Quit `ediff-review' review."
   (interactive)
   (ediff-review-close-review-file)
   (tab-bar-close-tab))
 
-(defun ediff-review-review-next-hunk ()
+(defun ediff-review-next-hunk ()
   "Go to next hunk."
   (interactive)
   (ediff-review--restore-overlays)
   (ediff-next-difference)
   (when (and
-         ediff-review--review-regions
-         (ediff-review--review-rebase-region-p))
-    (ediff-review--review-update-overlay 'a)
-    (ediff-review--review-update-overlay 'b)))
+         ediff-review---regions
+         (ediff-review---rebase-region-p))
+    (ediff-review---update-overlay 'a)
+    (ediff-review---update-overlay 'b)))
 
-(defun ediff-review-review-previous-hunk ()
+(defun ediff-review-previous-hunk ()
   "Go to previous hunk."
   (interactive)
   (ediff-review--restore-overlays)
   (ediff-previous-difference)
   (when (and
-         ediff-review--review-regions
-         (ediff-review--review-rebase-region-p))
-    (ediff-review--review-update-overlay 'a)
-    (ediff-review--review-update-overlay 'b)))
+         ediff-review---regions
+         (ediff-review---rebase-region-p))
+    (ediff-review---update-overlay 'a)
+    (ediff-review---update-overlay 'b)))
 
-(defun ediff-review-review-next-file ()
+(defun ediff-review-next-file ()
   "Review next file."
   (interactive)
   (let* ((current-index (cl-position
-                         ediff-review-review-file ediff-review-review-files :test #'equal))
+                         ediff-review-file ediff-review-files :test #'equal))
          (next-index (1+ current-index)))
-    (if (>= next-index (length ediff-review-review-files))
+    (if (>= next-index (length ediff-review-files))
         (message "No next file")
       (ediff-review-close-review-file)
-      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files next-index))
-      (ediff-review-review-file)
+      (funcall ediff-review-setup-function (seq-elt ediff-review-files next-index))
+      (ediff-review-file)
       (message "Next file"))))
 
-(defun ediff-review-review-previous-file ()
+(defun ediff-review-previous-file ()
   "Review previous file."
   (interactive)
   (let* ((current-index (cl-position
-                         ediff-review-review-file ediff-review-review-files :test #'equal))
+                         ediff-review-file ediff-review-files :test #'equal))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
         (message "No previous file")
       (ediff-review-close-review-file)
-      (funcall ediff-review-review-setup-function (seq-elt ediff-review-review-files previous-index))
-      (ediff-review-review-file)
+      (funcall ediff-review-setup-function (seq-elt ediff-review-files previous-index))
+      (ediff-review-file)
       (message "Previous file"))))
 
-(defun ediff-review-review-select-file ()
+(defun ediff-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let* ((candidates (ediff-review--review-file-candidates))
+  (when-let* ((candidates (ediff-review---file-candidates))
               (metadata `(metadata
                           (category . ediff-review-file)
                           (cycle-sort-function . identity)
@@ -342,19 +342,19 @@
               (candidate (completing-read "Select file: " collection nil t))
               (file (cdr (assoc candidate candidates ))))
     (ediff-review-close-review-file)
-    (funcall ediff-review-review-setup-function file)
-    (ediff-review-review-file)))
+    (funcall ediff-review-setup-function file)
+    (ediff-review-file)))
 
 ;;;###autoload
 (defun ediff-review-change ()
   "Review current change."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
+    (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (setq ediff-review-project-root default-directory)
-    (setq ediff-review-review-base "HEAD~1")
-    (setq ediff-review-review-commit "HEAD")
-    (ediff-review-review-files)
+    (setq ediff-review-base "HEAD~1")
+    (setq ediff-review-commit "HEAD")
+    (ediff-review-files)
     (ediff-review-start-review)))
 
 ;;;###autoload
@@ -362,28 +362,28 @@
   "Review the difference between two patch-sets."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq ediff-review-review-setup-function #'ediff-review-setup-project-file-review)
+    (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (setq ediff-review-project-root default-directory)
-    (setq ediff-review-review-base (completing-read "Select base revision: "
+    (setq ediff-review-base (completing-read "Select base revision: "
                                             (ediff-review--other-git-branches)))
-    (setq ediff-review-review-commit (ediff-review--current-git-branch))
-    (when (and ediff-review-review-base ediff-review-review-commit)
-      (ediff-review-branch-review-files ediff-review-review-base ediff-review-review-commit)
+    (setq ediff-review-commit (ediff-review--current-git-branch))
+    (when (and ediff-review-base ediff-review-commit)
+      (ediff-review-branch-review-files ediff-review-base ediff-review-commit)
       (ediff-review-start-review))))
 
-(defun ediff-review-review-browse-b ()
+(defun ediff-review-browse-b ()
   (interactive)
-  (funcall ediff-review-review-open-in-browser 'b))
+  (funcall ediff-review-open-in-browser 'b))
 
-(defun ediff-review-review-browse-a ()
+(defun ediff-review-browse-a ()
   (interactive)
-  (funcall ediff-review-review-open-in-browser 'a))
+  (funcall ediff-review-open-in-browser 'a))
 
 ;;;; Support functions
 
-(defun ediff-review--review-enable-mode ()
+(defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
-  (when-let* ((extension (file-name-extension ediff-review-review-file t))
+  (when-let* ((extension (file-name-extension ediff-review-file t))
               (mode (thread-last auto-mode-alist
                                  (seq-find (lambda (it)
                                              (string-match-p (car it) extension)))
@@ -417,9 +417,9 @@
                                  ('ediff-review-fine-rebase-diff
                                   (overlay-put it 'face 'ediff-fine-diff-B))))))))))
 
-(defun ediff-review--review-rebase-region-p ()
+(defun ediff-review---rebase-region-p ()
   "Return t if current diff is based on a rebase."
-  (unless (string= "COMMIT_MSG" ediff-review-review-file)
+  (unless (string= "COMMIT_MSG" ediff-review-file)
     (let* ((current-region-fun (lambda (buffer face)
                                  (with-current-buffer buffer
                                    (when-let ((diff-overlay
@@ -432,9 +432,9 @@
             `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
               (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
       (not
-       (ediff-review--file-differences-intersect-p file-regions ediff-review--review-regions)))))
+       (ediff-review--file-differences-intersect-p file-regions ediff-review---regions)))))
 
-(defun ediff-review--review-update-overlay (side)
+(defun ediff-review---update-overlay (side)
   "Update overlay on SIDE with different faces."
   (let ((buffer (if (eq side 'b) ediff-buffer-B ediff-buffer-A))
         (diff-face (if (eq side 'b) 'ediff-current-diff-B 'ediff-current-diff-A))
@@ -453,12 +453,12 @@
                       (overlay-put it 'face 'ediff-review-fine-rebase-diff))
                     diff-fine-overlays)))))))
 
-(defun ediff-review--review-file-candidates ()
+(defun ediff-review---file-candidates ()
   "Return an alist of review candidates."
-  (thread-last ediff-review-review-files
+  (thread-last ediff-review-files
                (seq-map-indexed (lambda (it index)
                                   (let* ((status
-                                          (cdr (assoc it ediff-review-review-files-metadata)))
+                                          (cdr (assoc it ediff-review-files-metadata)))
                                          (status-str (pcase (plist-get :type status)
                                                        ("A" "ADDED")
                                                        ("D" "DELETED")
@@ -528,15 +528,15 @@
 
 (defvar ediff-review-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "b a") #'ediff-review-review-browse-a)
-    (define-key map (kbd "b b") #'ediff-review-review-browse-b)
-    (define-key map (kbd "q") #'ediff-review-review-quit)
-    (define-key map (kbd "s") #'ediff-review-review-select-file)
-    (define-key map (kbd "t") #'ediff-review-review-toggle-highlight)
-    (define-key map (kbd "n") #'ediff-review-review-next-hunk)
-    (define-key map (kbd "p") #'ediff-review-review-previous-hunk)
-    (define-key map (kbd "]") #'ediff-review-review-next-file)
-    (define-key map (kbd "[") #'ediff-review-review-previous-file)
+    (define-key map (kbd "b a") #'ediff-review-browse-a)
+    (define-key map (kbd "b b") #'ediff-review-browse-b)
+    (define-key map (kbd "q") #'ediff-review-quit)
+    (define-key map (kbd "s") #'ediff-review-select-file)
+    (define-key map (kbd "t") #'ediff-review-toggle-highlight)
+    (define-key map (kbd "n") #'ediff-review-next-hunk)
+    (define-key map (kbd "p") #'ediff-review-previous-hunk)
+    (define-key map (kbd "]") #'ediff-review-next-file)
+    (define-key map (kbd "[") #'ediff-review-previous-file)
     map))
 
 (define-derived-mode ediff-review-mode fundamental-mode "Ediff Review"
@@ -544,8 +544,8 @@
   (rename-buffer
    (format "*Ediff Review: [%s/%s]"
            (1+ (cl-position
-                ediff-review-review-file ediff-review-review-files :test #'equal))
-           (length ediff-review-review-files))))
+                ediff-review-file ediff-review-files :test #'equal))
+           (length ediff-review-files))))
 
 (provide 'ediff-review)
 
