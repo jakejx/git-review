@@ -26,7 +26,7 @@
 
 ;;; Commentary:
 
-;; This package provides an `ediff' derived interface for reviewing patch sets.
+;; This package provides an `ediff' derived interface for reviewing patch-sets.
 
 ;;; Code:
 
