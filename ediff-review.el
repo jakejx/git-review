@@ -91,23 +91,24 @@
   "Setup `ediff-review' for project FILE review."
   (setf (alist-get 'current-file ediff-review) file)
   (let* ((default-directory (ediff-review--project-root))
-         (file-metadata (cdr (assoc (ediff-review--current-file) ediff-review-files-metadata))))
+         (file-info (ediff-review--current-file-info)))
     (ediff-review--setup-buffers)
-    (if (string= (ediff-review--current-file) "COMMIT_MSG")
-        (progn
-          (when (string-equal "M" (plist-get file-metadata :type))
-            (ediff-review--commit-message (ediff-review--base-revision)
-                                          ediff-review-base-revision-buffer))
-          (ediff-review--commit-message (ediff-review--current-revision)
-                                        ediff-review-current-revision-buffer))
-      (unless (string-equal "A" (plist-get file-metadata :type))
-        (ediff-review--file-content (ediff-review--base-revision)
-                                    (plist-get file-metadata :base-revision-name)
-                                    ediff-review-base-revision-buffer))
-      (unless (string-equal "D" (plist-get file-metadata :type))
-        (ediff-review--file-content (ediff-review--current-revision)
-                                    (plist-get file-metadata :current-revision-name)
-                                    ediff-review-current-revision-buffer t)))))
+    (let-alist file-info
+      (if (string= (ediff-review--current-file) "COMMIT_MSG")
+          (progn
+            (when (string-equal "M" .type)
+              (ediff-review--commit-message (ediff-review--base-revision)
+                                            ediff-review-base-revision-buffer))
+            (ediff-review--commit-message (ediff-review--current-revision)
+                                          ediff-review-current-revision-buffer))
+        (unless (string-equal "A" .type)
+          (ediff-review--file-content (ediff-review--base-revision)
+                                      .base-filename
+                                      ediff-review-base-revision-buffer))
+        (unless (string-equal "D" .type)
+          (ediff-review--file-content (ediff-review--current-revision)
+                                      file
+                                      ediff-review-current-revision-buffer t))))))
 
 (defun ediff-review-file ()
   "Review current file."
@@ -383,11 +384,13 @@
 
 (defun ediff-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
-  (when-let* ((file-info
-               (let-alist ediff-review
-                 (alist-get .current-file .files nil nil #'equal))))
-    (let-alist file-info
-      .current-revision-diff-regions)))
+  (let-alist (ediff-review--current-file-info)
+    .current-revision-diff-regions))
+
+(defun ediff-review--current-file-info ()
+  "Info about current file."
+  (let-alist ediff-review
+    (alist-get .current-file .files nil nil #'equal)))
 
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
   "Initialize review of CURRENT-REVISION.
@@ -423,13 +426,14 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
-  (let ((file-metadata (cdr (assoc (ediff-review--current-file) ediff-review-files-metadata))))
-    (setq ediff-review-base-revision-buffer
-          (get-buffer-create (format "%s<%s>" (ediff-review--base-revision)
-                                     (file-name-nondirectory (plist-get file-metadata :base-revision-name)))))
-    (setq ediff-review-current-revision-buffer
-          (get-buffer-create (format "%s<%s>" (ediff-review--current-revision)
-                                     (file-name-nondirectory (plist-get file-metadata :current-revision-name)))))
+  (let ((file-info (ediff-review--current-file-info)))
+    (let-alist file-info
+      (setq ediff-review-base-revision-buffer
+            (get-buffer-create (format "%s<%s>" (ediff-review--base-revision)
+                                       (file-name-nondirectory .base-filename))))
+      (setq ediff-review-current-revision-buffer
+            (get-buffer-create (format "%s<%s>" (ediff-review--current-revision)
+                                       (file-name-nondirectory (ediff-review--current-file))))))
     (with-current-buffer ediff-review-base-revision-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)))
@@ -520,9 +524,10 @@ Optionally instruct function to SET-FILENAME."
   "Return an alist of file candidates."
   (thread-last ediff-review-files
                (seq-map-indexed (lambda (it index)
-                                  (let* ((status
-                                          (cdr (assoc it ediff-review-files-metadata)))
-                                         (status-str (pcase (plist-get :type status)
+                                  (let* ((file-info
+                                          (let-alist ediff-review
+                                            (alist-get it .files nil nil #'equal)))
+                                         (status-str (pcase (let-alist file-info .type)
                                                        ("A" "ADDED")
                                                        ("D" "DELETED")
                                                        ("M" "MODIFIED")
