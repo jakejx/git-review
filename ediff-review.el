@@ -53,7 +53,6 @@
 
 (defvar ediff-review-files nil)
 (defvar ediff-review-files-metadata nil)
-(defvar ediff-review-file nil)
 (defvar ediff-review-setup-function nil)
 (defvar ediff-review-base-revision-buffer nil)
 (defvar ediff-review-current-revision-buffer nil)
@@ -90,12 +89,11 @@
 
 (defun ediff-review-setup-project-file-review (file)
   "Setup `ediff-review' for project FILE review."
-  (setq ediff-review-file file)
+  (setf (alist-get 'current-file ediff-review) file)
   (let* ((default-directory (ediff-review--project-root))
-         (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
-    (setf (alist-get 'current-file ediff-review) file)
+         (file-metadata (cdr (assoc (ediff-review--current-file) ediff-review-files-metadata))))
     (ediff-review--setup-buffers)
-    (if (string= ediff-review-file "COMMIT_MSG")
+    (if (string= (ediff-review--current-file) "COMMIT_MSG")
         (progn
           (when (string-equal "M" (plist-get file-metadata :type))
             (ediff-review--commit-message (ediff-review--base-revision)
@@ -112,7 +110,7 @@
                                     ediff-review-current-revision-buffer t)))))
 
 (defun ediff-review-file ()
-  "Review file."
+  "Review current file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (ediff-review--project-root)))
@@ -281,11 +279,11 @@
   "Review next file."
   (interactive)
   (let* ((current-index (cl-position
-                         ediff-review-file ediff-review-files :test #'equal))
+                         (ediff-review--current-file) ediff-review-files :test #'equal))
          (next-index (1+ current-index)))
     (if (>= next-index (length ediff-review-files))
         (message "No next file")
-      (setf (alist-get 'recent-file ediff-review) ediff-review-file)
+      (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
       (funcall ediff-review-setup-function (seq-elt ediff-review-files next-index))
       (ediff-review-file))))
@@ -294,11 +292,11 @@
   "Review previous file."
   (interactive)
   (let* ((current-index (cl-position
-                         ediff-review-file ediff-review-files :test #'equal))
+                         (ediff-review--current-file) ediff-review-files :test #'equal))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
         (message "No previous file")
-      (setf (alist-get 'recent-file ediff-review) ediff-review-file)
+      (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
       (funcall ediff-review-setup-function (seq-elt ediff-review-files previous-index))
       (ediff-review-file))))
@@ -317,7 +315,7 @@
                               (complete-with-action action candidates string predicate))))
               (candidate (completing-read "Select file: " collection nil t))
               (file (cdr (assoc candidate candidates))))
-    (setf (alist-get 'recent-file ediff-review) ediff-review-file)
+    (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
     (ediff-review-close-review-file)
     (funcall ediff-review-setup-function file)
     (ediff-review-file)))
@@ -425,7 +423,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
-  (let ((file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
+  (let ((file-metadata (cdr (assoc (ediff-review--current-file) ediff-review-files-metadata))))
     (setq ediff-review-base-revision-buffer
           (get-buffer-create (format "%s<%s>" (ediff-review--base-revision)
                                      (file-name-nondirectory (plist-get file-metadata :base-revision-name)))))
@@ -441,7 +439,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
-  (when-let* ((extension (file-name-extension ediff-review-file t))
+  (when-let* ((extension (file-name-extension (ediff-review--current-file) t))
               (mode (thread-last auto-mode-alist
                                  (seq-find (lambda (it)
                                              (string-match-p (car it) extension)))
@@ -477,7 +475,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review---rebase-region-p ()
   "Return t if current diff is based on a rebase."
-  (unless (string= "COMMIT_MSG" ediff-review-file)
+  (unless (string= "COMMIT_MSG" (ediff-review--current-file))
     (let* ((current-region-fun (lambda (buffer face)
                                  (with-current-buffer buffer
                                    (when-let ((diff-overlay
@@ -599,7 +597,7 @@ Optionally instruct function to SET-FILENAME."
   (rename-buffer
    (format "*Ediff Review: [%s/%s]"
            (1+ (cl-position
-                ediff-review-file ediff-review-files :test #'equal))
+                (ediff-review--current-file) ediff-review-files :test #'equal))
            (length ediff-review-files))))
 
 (provide 'ediff-review)
