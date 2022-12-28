@@ -613,8 +613,10 @@ Optionally instruct function to SET-FILENAME."
 
 (defvar ediff-review-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "b a") #'ediff-review-browse-a)
-    (define-key map (kbd "b b") #'ediff-review-browse-b)
+    (define-key map (kbd "ba") #'ediff-review-browse-a)
+    (define-key map (kbd "bb") #'ediff-review-browse-b)
+    (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
+    (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'ediff-review-quit)
     (define-key map (kbd "s") #'ediff-review-select-file)
     (define-key map (kbd "n") #'ediff-review-next-hunk)
