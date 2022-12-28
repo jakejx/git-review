@@ -90,7 +90,7 @@
   "Setup `ediff-review' for project FILE review."
   (setf (alist-get 'current-file ediff-review) file)
   (let* ((default-directory (ediff-review--project-root))
-         (file-info (ediff-review--current-file-info)))
+         (file-info (ediff-review--file-info)))
     (ediff-review--setup-buffers)
     (let-alist file-info
       (if (string= (ediff-review--current-file) "COMMIT_MSG")
@@ -120,6 +120,8 @@
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
+    (ediff-review--store-buffer-locations)
+    (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -242,13 +244,9 @@
            (current-regions (ediff-review-hunk-regions (concat (ediff-review--current-revision) "~1")
                                                        (ediff-review--current-revision)
                                                        file
-                                                       file))
-           (files (let-alist ediff-review .files))
-           (file-info (alist-get file files)))
-      (setf (alist-get 'review-diff-regions file-info) base-current-regions)
-      (setf (alist-get 'current-revision-diff-regions file-info) current-regions)
-      (setf (alist-get file files nil nil #'equal) file-info)
-      (setf (alist-get 'files ediff-review) files)
+                                                       file)))
+      (ediff-review--update-file file 'review-diff-regions base-current-regions)
+      (ediff-review--update-file file 'current-revision-diff-regions current-regions)
       (not
        (ediff-review--file-differences-intersect-p base-current-regions
                                                    current-regions)))))
@@ -387,13 +385,28 @@
 
 (defun ediff-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
-  (let-alist (ediff-review--current-file-info)
+  (let-alist (ediff-review--file-info)
     .current-revision-diff-regions))
 
-(defun ediff-review--current-file-info ()
-  "Info about current file."
+(defun ediff-review--file-info (&optional file)
+  "Info about FILE."
   (let-alist ediff-review
-    (alist-get .current-file .files nil nil #'equal)))
+    (let ((file (or file .current-file)))
+      (alist-get file .files nil nil #'equal))))
+
+(defun ediff-review--update-file (file key value)
+  "Update FILE with KEY and VALUE."
+  (let* ((files (let-alist ediff-review .files))
+         (file-info (alist-get file files nil nil #'equal)))
+    (setf (alist-get key file-info) value)
+    (setf (alist-get file files nil nil #'equal) file-info)
+    (setf (alist-get 'files ediff-review) files)))
+
+(defun ediff-review--store-buffer-locations ()
+  "Store locations in review buffers for current review file."
+  (ediff-review--update-file (ediff-review--current-file) 'buffer-location
+                             `((a . ,(with-current-buffer ediff-review-base-revision-buffer (point)))
+                               (b . ,(with-current-buffer ediff-review-current-revision-buffer (point))))))
 
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
   "Initialize review of CURRENT-REVISION.
@@ -429,7 +442,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
-  (let ((file-info (ediff-review--current-file-info)))
+  (let ((file-info (ediff-review--file-info)))
     (let-alist file-info
       (setq ediff-review-base-revision-buffer
             (get-buffer-create (format "%s<%s>" (ediff-review--base-revision)
