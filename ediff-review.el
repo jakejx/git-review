@@ -120,8 +120,9 @@
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
-    (ediff-review--store-buffer-locations)
     (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
+    (ediff-review--store-buffer-locations)
+    (ediff-review--store-progress)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -407,6 +408,19 @@
   (ediff-review--update-file (ediff-review--current-file) 'buffer-location
                              `((a . ,(with-current-buffer ediff-review-base-revision-buffer (point)))
                                (b . ,(with-current-buffer ediff-review-current-revision-buffer (point))))))
+
+(defun ediff-review--store-progress ()
+  "Store progress percentage."
+  (let ((progress (let-alist ediff-review
+                    (/
+                     (thread-last .files
+                                  (seq-map #'cdr)
+                                  (seq-filter (lambda (it)
+                                                (let-alist it .reviewed)))
+                                  (length)
+                                  (float))
+                     (length .files)))))
+    (setf (alist-get 'progress ediff-review) progress)))
 
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
   "Initialize review of CURRENT-REVISION.
