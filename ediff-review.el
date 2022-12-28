@@ -75,16 +75,15 @@
 ;;;; Functions
 
 (defun ediff-review-start-review ()
-  "Start review of variable `ediff-review-files'."
+  "Start review."
   (let ((ediff-review-tab "Ediff-Review Review"))
-    (when (and ediff-review-files
-               (not (member ediff-review-tab
-                            (mapcar (lambda (tab)
-                                      (alist-get 'name tab))
-                                    (tab-bar-tabs)))))
+    (when (not (member ediff-review-tab
+                       (mapcar (lambda (tab)
+                                 (alist-get 'name tab))
+                               (tab-bar-tabs))))
       (tab-bar-new-tab)
       (tab-bar-rename-tab ediff-review-tab)
-      (funcall ediff-review-setup-function (seq-elt ediff-review-files 0))
+      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) 0))
       (ediff-review-file))))
 
 (defun ediff-review-setup-project-file-review (file)
@@ -280,26 +279,26 @@
   "Review next file."
   (interactive)
   (let* ((current-index (cl-position
-                         (ediff-review--current-file) ediff-review-files :test #'equal))
+                         (ediff-review--current-file) (ediff-review--files) :test #'equal))
          (next-index (1+ current-index)))
-    (if (>= next-index (length ediff-review-files))
+    (if (>= next-index (length (ediff-review--files)))
         (message "No next file")
       (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
-      (funcall ediff-review-setup-function (seq-elt ediff-review-files next-index))
+      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) next-index))
       (ediff-review-file))))
 
 (defun ediff-review-previous-file ()
   "Review previous file."
   (interactive)
   (let* ((current-index (cl-position
-                         (ediff-review--current-file) ediff-review-files :test #'equal))
+                         (ediff-review--current-file) (ediff-review--files) :test #'equal))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
         (message "No previous file")
       (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
-      (funcall ediff-review-setup-function (seq-elt ediff-review-files previous-index))
+      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) previous-index))
       (ediff-review-file))))
 
 (defun ediff-review-select-file ()
@@ -377,6 +376,10 @@
 (defun ediff-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."
   (let-alist ediff-review .multiple-patchsets))
+
+(defun ediff-review--files ()
+  "Return a list of review files."
+  (seq-map #'car (let-alist ediff-review .files)))
 
 (defun ediff-review--current-file ()
   "Return the name of the current file being reviewed."
@@ -522,7 +525,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review---file-candidates ()
   "Return an alist of file candidates."
-  (thread-last ediff-review-files
+  (thread-last (ediff-review--files)
                (seq-map-indexed (lambda (it index)
                                   (let* ((file-info
                                           (let-alist ediff-review
@@ -602,8 +605,8 @@ Optionally instruct function to SET-FILENAME."
   (rename-buffer
    (format "*Ediff Review: [%s/%s]"
            (1+ (cl-position
-                (ediff-review--current-file) ediff-review-files :test #'equal))
-           (length ediff-review-files))))
+                (ediff-review--current-file) (ediff-review--files) :test #'equal))
+           (length (ediff-review--files)))))
 
 (provide 'ediff-review)
 
