@@ -36,8 +36,6 @@
 (require 'project)
 (require 'tab-bar)
 
-;; TODO:
-;; - `ediff-review-file-base-revision' and `ediff-review-file-current-revision'
 
 
 ;;;; Variables
@@ -57,12 +55,7 @@
 (defvar ediff-review-files-metadata nil)
 (defvar ediff-review-file nil)
 (defvar ediff-review-project-root nil)
-(defvar ediff-review-temp-dir nil)
-(defvar ediff-review-file-a nil)
-(defvar ediff-review-file-b nil)
 (defvar ediff-review-setup-function nil)
-(defvar ediff-review-base-revision nil)
-(defvar ediff-review-current-revision nil)
 (defvar ediff-review-base-revision-buffer nil)
 (defvar ediff-review-current-revision-buffer nil)
 
@@ -106,35 +99,38 @@
   (setq ediff-review-file file)
   (let* ((default-directory ediff-review-project-root)
          (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
+    (setf (alist-get 'current-file ediff-review) file)
+    ;; TODO(Niklas Eklund, 20221228): Deprecate the regions it has already been calculated once
     (setq ediff-review---regions
-          (ediff-review-hunk-regions (concat ediff-review-current-revision "~1")
-                                     ediff-review-current-revision
-                                     (plist-get file-metadata :current-revision-name)
-                                     (plist-get file-metadata :current-revision-name)))
+          (when (ediff-review--multiple-patchsets-p)
+            (ediff-review--current-revision-diff-regions)
+            ;; (ediff-review-hunk-regions (concat (ediff-review--current-revision) "~1")
+            ;;                            (ediff-review--current-revision)
+            ;;                            (plist-get file-metadata :current-revision-name)
+            ;;                            (plist-get file-metadata :current-revision-name))
+            ))
     (ediff-review--setup-buffers)
-    (let-alist ediff-review
-      (if (string= ediff-review-file "COMMIT_MSG")
-          (progn
-            (when (string-equal "M" (plist-get file-metadata :type))
-              (ediff-review--commit-message .base-revision
-                                            ediff-review-base-revision-buffer))
-            (ediff-review--commit-message .current-revision
-                                          ediff-review-current-revision-buffer))
-        (unless (string-equal "A" (plist-get file-metadata :type))
-          (ediff-review--file-content .base-revision
-                                      (plist-get file-metadata :base-revision-name)
-                                      ediff-review-base-revision-buffer))
-        (unless (string-equal "D" (plist-get file-metadata :type))
-          (ediff-review--file-content .current-revision
-                                      (plist-get file-metadata :current-revision-name)
-                                      ediff-review-current-revision-buffer t))))))
+    (if (string= ediff-review-file "COMMIT_MSG")
+        (progn
+          (when (string-equal "M" (plist-get file-metadata :type))
+            (ediff-review--commit-message (ediff-review--base-revision)
+                                          ediff-review-base-revision-buffer))
+          (ediff-review--commit-message (ediff-review--current-revision)
+                                        ediff-review-current-revision-buffer))
+      (unless (string-equal "A" (plist-get file-metadata :type))
+        (ediff-review--file-content (ediff-review--base-revision)
+                                    (plist-get file-metadata :base-revision-name)
+                                    ediff-review-base-revision-buffer))
+      (unless (string-equal "D" (plist-get file-metadata :type))
+        (ediff-review--file-content (ediff-review--current-revision)
+                                    (plist-get file-metadata :current-revision-name)
+                                    ediff-review-current-revision-buffer t)))))
 
 (defun ediff-review-file ()
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory ediff-review-project-root))
-    (setf (alist-get 'current-file ediff-review) ediff-review-file)
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)))
 
 (defun ediff-review-close-review-file ()
@@ -159,10 +155,10 @@
            (string-trim
             (shell-command-to-string
              (format "git diff --name-status %s..%s"
-                     (let-alist ediff-review .base-revision)
-                     (let-alist ediff-review .current-revision))))
+                     (ediff-review--base-revision)
+                     (ediff-review--current-revision))))
            "\n")))
-    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patch-sets) "M" "A")) ,@files-in-latest-commit))
+    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
     (setq ediff-review-files
           (seq-map (lambda (it)
                      (let ((elements (split-string it)))
@@ -256,12 +252,12 @@
   "Return t if FILE is changed due to a rebase."
   (unless (string= file "COMMIT_MSG")
     (let* ((file-metadata (cdr (assoc file ediff-review-files-metadata)))
-           (base-current-regions (ediff-review-hunk-regions (let-alist ediff-review .base-revision)
-                                                            (let-alist ediff-review .current-revision)
+           (base-current-regions (ediff-review-hunk-regions (ediff-review--base-revision)
+                                                            (ediff-review--current-revision)
                                                             (plist-get file-metadata :base-revision-name)
                                                             file))
-           (current-regions (ediff-review-hunk-regions (concat (let-alist ediff-review .current-revision) "~1")
-                                                       (let-alist ediff-review .current-revision)
+           (current-regions (ediff-review-hunk-regions (concat (ediff-review--current-revision) "~1")
+                                                       (ediff-review--current-revision)
                                                        file
                                                        file))
            (files (let-alist ediff-review .files))
@@ -348,8 +344,6 @@
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (setq ediff-review-project-root default-directory)
-    (setq ediff-review-base-revision "HEAD~1")
-    (setq ediff-review-current-revision "HEAD")
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review-files)
     (ediff-review-start-review)))
@@ -361,15 +355,16 @@
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (setq ediff-review-project-root default-directory)
-    (setq ediff-review-base-revision (completing-read "Select base revision: "
-                                                      (ediff-review--other-git-branches)))
-    (when ediff-review-base-revision
-      (setq ediff-review-current-revision (ediff-review--current-git-branch))
-      (ediff-review--initialize-review (ediff-review--current-git-branch) ediff-review-base-revision)
-      (let-alist ediff-review
-        (when (and .base-revision .current-revision)
-          (ediff-review-branch-review-files .base-revision .current-revision)
-          (ediff-review-start-review))))))
+    (when-let ((base-revision (completing-read "Select base revision: "
+                                               (ediff-review--other-git-branches)))
+               (current-revision (ediff-review--current-git-branch)))
+      (ediff-review--initialize-review current-revision
+                                       base-revision)
+      (when (and (ediff-review--base-revision)
+                 (ediff-review--current-revision))
+        (ediff-review-branch-review-files (ediff-review--base-revision)
+                                          (ediff-review--current-revision))
+        (ediff-review-start-review)))))
 
 (defun ediff-review-browse-a ()
   "Open side a in browser."
@@ -383,12 +378,39 @@
 
 ;;;; Support functions
 
+(defun ediff-review--current-revision ()
+  "Return the current revision."
+  (let-alist ediff-review .current-revision))
+
+(defun ediff-review--base-revision ()
+  "Return the base revision."
+  (let-alist ediff-review
+    (or .base-revision
+        (concat .current-revision "~1"))))
+
+(defun ediff-review--multiple-patchsets-p ()
+  "Return t if multiple patch-sets are being reviewed."
+  (let-alist ediff-review .multiple-patchsets))
+
+(defun ediff-review--current-file ()
+  "Return the name of the current file being reviewed."
+  (let-alist ediff-review .current-file))
+
+(defun ediff-review--current-revision-diff-regions ()
+  "Return diff regions for file from current revision."
+  (when-let* ((file-info
+               (let-alist ediff-review
+                 (alist-get .current-file .files nil nil #'equal))))
+    (let-alist file-info
+      .current-revision-diff-regions)))
+
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
   "Initialize review of CURRENT-REVISION.
 
-Optionally provide a BASE-REVISION for multiple patchset reviews."
+If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
   (setq ediff-review `((base-revision . ,base-revision)
                        (current-revision . ,current-revision)
+                       (multiple-patchsets . ,(not (null base-revision)))
                        (project . ,ediff-review-project-root))))
 
 (defun ediff-review--file-content (revision file buffer &optional set-filename)
@@ -417,19 +439,18 @@ Optionally instruct function to SET-FILENAME."
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
   (let ((file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
-    (let-alist ediff-review
-      (setq ediff-review-base-revision-buffer
-            (get-buffer-create (format "%s<%s>" .base-revision
-                                       (file-name-nondirectory (plist-get file-metadata :base-revision-name)))))
-      (setq ediff-review-current-revision-buffer
-            (get-buffer-create (format "%s<%s>" .current-revision
-                                       (file-name-nondirectory (plist-get file-metadata :current-revision-name))))))
+    (setq ediff-review-base-revision-buffer
+          (get-buffer-create (format "%s<%s>" (ediff-review--base-revision)
+                                     (file-name-nondirectory (plist-get file-metadata :base-revision-name)))))
+    (setq ediff-review-current-revision-buffer
+          (get-buffer-create (format "%s<%s>" (ediff-review--current-revision)
+                                     (file-name-nondirectory (plist-get file-metadata :current-revision-name)))))
     (with-current-buffer ediff-review-base-revision-buffer
-        (let ((inhibit-read-only t))
-          (erase-buffer)))
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
     (with-current-buffer ediff-review-current-revision-buffer
-        (let ((inhibit-read-only t))
-          (erase-buffer)))))
+      (let ((inhibit-read-only t))
+        (erase-buffer)))))
 
 (defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
