@@ -50,11 +50,6 @@
 ;;;; Public
 
 (defvar ediff-review nil)
-
-;; TODO: Deprecate the need for the two following variables
-(defvar ediff-review-files nil)
-(defvar ediff-review-files-metadata nil)
-
 (defvar ediff-review-base-revision-buffer nil)
 (defvar ediff-review-current-revision-buffer nil)
 
@@ -135,8 +130,8 @@
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun ediff-review-files ()
-  "Set the files to review."
+(defun ediff-review--patchset-files ()
+  "Determine which files to review."
   (let* ((files-in-latest-commit
           (split-string
            (string-trim
@@ -146,30 +141,21 @@
                      (ediff-review--current-revision))))
            "\n")))
     (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
-    (setq ediff-review-files
-          (seq-map (lambda (it)
-                     (let ((elements (split-string it)))
-                       (pcase elements
-                         (`(,_type ,name) name)
-                         (`(,_type ,_basename ,name) name))))
-                   files-in-latest-commit))
-    (setq ediff-review-files-metadata
-          (seq-map (lambda (it)
-                     (let ((elements (split-string it)))
-                       (pcase elements
-                         (`(,type ,name) (cons name `(:type ,type :current-revision-name ,name :base-revision-name ,name)))
-                         (`(,type ,basename ,name) (cons name `(:type ,type :current-revision-name ,name :base-revision-name ,basename))))))
-                   files-in-latest-commit))
-    ;; Update `ediff-review' with files
     (setf (alist-get 'files ediff-review)
-          (thread-last ediff-review-files
-                       (seq-map (lambda (file)
-                                  (let ((metadata (cdr (assoc file ediff-review-files-metadata))))
-                                    metadata
-                                    (cons file `((current-filename . ,(plist-get metadata :current-revision-name))
-                                                 (base-filename . ,(plist-get metadata :base-revision-name))
-                                                 (type . ,(plist-get metadata :type))
-                                                 (reviewed . ,nil))))))))))
+          (seq-map (lambda (it)
+                     (let ((elements (split-string it)))
+                       (pcase elements
+                         (`(,type ,filename)
+                          (cons filename `((current-filename . ,filename)
+                                           (base-filename . ,filename)
+                                           (type . ,type)
+                                           (reviewed . nil))))
+                         (`(,type ,base-filename ,filename)
+                          (cons filename `((current-filename . ,filename)
+                                           (base-filename . ,base-filename)
+                                           (type . ,type)
+                                           (reviewed . nil)))))))
+                   files-in-latest-commit))))
 
 (defun ediff-review-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
@@ -189,25 +175,24 @@
 
 (defun ediff-review-branch-review-files (branch-a branch-b)
   "Set list of files based on BRANCH-A and BRANCH-B."
-  (ediff-review-files)
+  (ediff-review--patchset-files)
   ;; Filter review files to only be modified in latest commits on
   ;; branch-a and branch-b
   (let* ((files-union
-          (thread-last `(,branch-a ,branch-b)
-                       (seq-map #'ediff-review-branch-modified-files)
-                       (flatten-list))))
-    (setq files-union `("COMMIT_MSG" ,@files-union))
-    (setq ediff-review-files
-          (thread-last ediff-review-files
+          `("COMMIT_MSG" ,@(thread-last `(,branch-a ,branch-b)
+                                        (seq-map #'ediff-review-branch-modified-files)
+                                        (flatten-list))))
+         (review-files
+          (thread-last (ediff-review--files)
                        (seq-filter (lambda (it)
                                      (member it files-union)))
-                       (seq-remove #'ediff-review-file-rebased-p)))
+                       (seq-remove #'ediff-review-file-rebased-p))))
     ;; Update `ediff-review' with files
     (let ((updated-files (alist-get 'files ediff-review)))
       (seq-do (lambda (it)
-                 (let ((file (car it)))
-                   (unless (member file ediff-review-files)
-                     (setf updated-files (assoc-delete-all file updated-files #'equal)))))
+                (let ((file (car it)))
+                  (unless (member file review-files)
+                    (setf updated-files (assoc-delete-all file updated-files #'equal)))))
               updated-files)
       (setf (alist-get 'files ediff-review) updated-files))))
 
@@ -238,10 +223,10 @@
 (defun ediff-review-file-rebased-p (file)
   "Return t if FILE is changed due to a rebase."
   (unless (string= file "COMMIT_MSG")
-    (let* ((file-metadata (cdr (assoc file ediff-review-files-metadata)))
+    (let* ((file-info (ediff-review--file-info file))
            (base-current-regions (ediff-review-hunk-regions (ediff-review--base-revision)
                                                             (ediff-review--current-revision)
-                                                            (plist-get file-metadata :base-revision-name)
+                                                            (let-alist file-info .base-filename)
                                                             file))
            (current-regions (ediff-review-hunk-regions (concat (ediff-review--current-revision) "~1")
                                                        (ediff-review--current-revision)
@@ -326,7 +311,7 @@
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
-    (ediff-review-files)
+    (ediff-review--patchset-files)
     (ediff-review-start-review)))
 
 ;;;###autoload
