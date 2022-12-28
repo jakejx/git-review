@@ -53,7 +53,7 @@
 
 (defvar ediff-review-files nil)
 (defvar ediff-review-files-metadata nil)
-(defvar ediff-review-setup-function nil)
+
 (defvar ediff-review-base-revision-buffer nil)
 (defvar ediff-review-current-revision-buffer nil)
 
@@ -83,7 +83,7 @@
                                (tab-bar-tabs))))
       (tab-bar-new-tab)
       (tab-bar-rename-tab ediff-review-tab)
-      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) 0))
+      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) 0))
       (ediff-review-file))))
 
 (defun ediff-review-setup-project-file-review (file)
@@ -284,7 +284,7 @@
         (message "No next file")
       (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
-      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) next-index))
+      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) next-index))
       (ediff-review-file))))
 
 (defun ediff-review-previous-file ()
@@ -297,7 +297,7 @@
         (message "No previous file")
       (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
       (ediff-review-close-review-file)
-      (funcall ediff-review-setup-function (seq-elt (ediff-review--files) previous-index))
+      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) previous-index))
       (ediff-review-file))))
 
 (defun ediff-review-select-file ()
@@ -316,7 +316,7 @@
               (file (cdr (assoc candidate candidates))))
     (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
     (ediff-review-close-review-file)
-    (funcall ediff-review-setup-function file)
+    (ediff-review-setup-project-file-review file)
     (ediff-review-file)))
 
 ;;;###autoload
@@ -324,7 +324,6 @@
   "Review current patch-set."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review-files)
     (ediff-review-start-review)))
@@ -334,7 +333,6 @@
   "Review the difference between two patch-sets."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
-    (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
     (when-let ((base-revision (completing-read "Select base revision: "
                                                (ediff-review--other-git-branches)))
                (current-revision (ediff-review--current-git-branch)))
