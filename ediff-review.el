@@ -431,6 +431,18 @@ If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
                        (multiple-patchsets . ,(not (null base-revision)))
                        (project . ,default-directory))))
 
+(defun ediff-review--restore-buffer-locations ()
+  "Restore buffer locations if current file has been reviewed before."
+  ;; TODO(Niklas Eklund, 20221228): This function needs some more thoughts
+  (let-alist (ediff-review--file-info)
+    (when .buffer-location
+      (with-selected-window (get-buffer-window ediff-review-base-revision-buffer)
+        (goto-char .buffer-location.a)
+        (recenter))
+      (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+        (goto-char .buffer-location.b)
+        (recenter)))))
+
 (defun ediff-review--file-content (revision file buffer &optional set-filename)
   "Populate BUFFER with FILE content from REVISION.
 
