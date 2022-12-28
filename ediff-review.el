@@ -54,14 +54,9 @@
 (defvar ediff-review-files nil)
 (defvar ediff-review-files-metadata nil)
 (defvar ediff-review-file nil)
-(defvar ediff-review-project-root nil)
 (defvar ediff-review-setup-function nil)
 (defvar ediff-review-base-revision-buffer nil)
 (defvar ediff-review-current-revision-buffer nil)
-
-;;;;; Private
-
-(defvar ediff-review---regions nil)
 
 ;;;; Faces
 
@@ -84,7 +79,6 @@
   "Start review of variable `ediff-review-files'."
   (let ((ediff-review-tab "Ediff-Review Review"))
     (when (and ediff-review-files
-               ediff-review-project-root
                (not (member ediff-review-tab
                             (mapcar (lambda (tab)
                                       (alist-get 'name tab))
@@ -97,18 +91,9 @@
 (defun ediff-review-setup-project-file-review (file)
   "Setup `ediff-review' for project FILE review."
   (setq ediff-review-file file)
-  (let* ((default-directory ediff-review-project-root)
+  (let* ((default-directory (ediff-review--project-root))
          (file-metadata (cdr (assoc ediff-review-file ediff-review-files-metadata))))
     (setf (alist-get 'current-file ediff-review) file)
-    ;; TODO(Niklas Eklund, 20221228): Deprecate the regions it has already been calculated once
-    (setq ediff-review---regions
-          (when (ediff-review--multiple-patchsets-p)
-            (ediff-review--current-revision-diff-regions)
-            ;; (ediff-review-hunk-regions (concat (ediff-review--current-revision) "~1")
-            ;;                            (ediff-review--current-revision)
-            ;;                            (plist-get file-metadata :current-revision-name)
-            ;;                            (plist-get file-metadata :current-revision-name))
-            ))
     (ediff-review--setup-buffers)
     (if (string= ediff-review-file "COMMIT_MSG")
         (progn
@@ -130,7 +115,7 @@
   "Review file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory ediff-review-project-root))
+             (default-directory (ediff-review--project-root)))
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)))
 
 (defun ediff-review-close-review-file ()
@@ -343,7 +328,6 @@
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
-    (setq ediff-review-project-root default-directory)
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review-files)
     (ediff-review-start-review)))
@@ -354,7 +338,6 @@
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq ediff-review-setup-function #'ediff-review-setup-project-file-review)
-    (setq ediff-review-project-root default-directory)
     (when-let ((base-revision (completing-read "Select base revision: "
                                                (ediff-review--other-git-branches)))
                (current-revision (ediff-review--current-git-branch)))
@@ -377,6 +360,10 @@
   (funcall ediff-review-open-in-browser 'b))
 
 ;;;; Support functions
+
+(defun ediff-review--project-root ()
+  "Return the project root of the current review."
+  (let-alist ediff-review .project))
 
 (defun ediff-review--current-revision ()
   "Return the current revision."
@@ -411,7 +398,7 @@ If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
   (setq ediff-review `((base-revision . ,base-revision)
                        (current-revision . ,current-revision)
                        (multiple-patchsets . ,(not (null base-revision)))
-                       (project . ,ediff-review-project-root))))
+                       (project . ,default-directory))))
 
 (defun ediff-review--file-content (revision file buffer &optional set-filename)
   "Populate BUFFER with FILE content from REVISION.
@@ -422,9 +409,9 @@ Optionally instruct function to SET-FILENAME."
       (call-process-shell-command
        (format "git show %s:%s" revision file) nil t)
       (setq-local default-directory
-                  (file-name-directory (expand-file-name file ediff-review-project-root)))
+                  (file-name-directory (expand-file-name file (ediff-review--project-root))))
       (when set-filename
-        (setq-local buffer-file-name (expand-file-name file ediff-review-project-root)))
+        (setq-local buffer-file-name (expand-file-name file (ediff-review--project-root))))
       (ediff-review---enable-mode))
     (read-only-mode)))
 
@@ -503,12 +490,13 @@ Optionally instruct function to SET-FILENAME."
             `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
               (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
       (not
-       (ediff-review--file-differences-intersect-p file-regions ediff-review---regions)))))
+       (ediff-review--file-differences-intersect-p file-regions
+                                                   (ediff-review--current-revision-diff-regions))))))
 
 (defun ediff-review---maybe-modify-overlays ()
   "Maybe modify overlays if current diff is due to a rebase."
   (when-let* ((is-rebase-diff (and
-                               ediff-review---regions
+                               (ediff-review--multiple-patchsets-p)
                                (ediff-review---rebase-region-p)))
               (update-overlay-fun
                (lambda (side)
