@@ -51,6 +51,7 @@
 
 (defvar ediff-review nil)
 
+;; TODO: Deprecate the need for the two following variables
 (defvar ediff-review-files nil)
 (defvar ediff-review-files-metadata nil)
 
