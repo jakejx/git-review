@@ -52,6 +52,17 @@
   :type 'string
   :group 'ediff-review)
 
+(defcustom ediff-review-comment-renderer-function
+  #'ediff-review--comment-renderer
+  "Function to render a comment."
+  :type 'symbol
+  :group 'ediff-review)
+
+(defcustom ediff-review-comment-major-mode nil
+  "Defines the major mode to use in comment mode."
+  :type 'symbol
+  :group 'ediff-review)
+
 ;;;; Public
 
 (defvar ediff-review nil)
@@ -667,6 +678,10 @@ Optionally instruct function to SET-FILENAME."
 
 ;;;; WIP Comments
 
+(defun ediff-review--comment-renderer (comment)
+  "Default renderer for COMMENT."
+  (let-alist comment .message))
+
 (defun ediff-review--restore-comment-overlays ()
   "Restore comment overlays in the current file."
   (when (ediff-review--has-comments-p (ediff-review--current-file))
@@ -690,8 +705,10 @@ Optionally instruct function to SET-FILENAME."
         (beginning-of-line)
         (let* ((ov (make-overlay (point) (point)))
                (time (format-time-string "%Y-%m-%d %a %H:%M:%S" (current-time)))
-               (summary (truncate-string-to-width (seq-elt (split-string .message "\n") 0) 30))
-               (comment-header (format "%s: %s... %s\n" ediff-review-user summary time)))
+               (comment-message (funcall ediff-review-comment-renderer-function ediff-review--current-comment))
+               (summary (seq-elt (split-string comment-message "\n") 0))
+               (summary-str (truncate-string-to-width summary 30))
+               (comment-header (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") " " time "\n")))
           (when .header-overlay
             (delete-overlay .header-overlay))
           (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
@@ -722,6 +739,7 @@ Optionally instruct function to SET-FILENAME."
            (end-point . ,(point)))))
     `((id . ,id)
       (side . ,side)
+      (published . ,nil)
       (location . ,location))))
 
 (defun ediff-review-comment ()
@@ -744,9 +762,12 @@ Optionally instruct function to SET-FILENAME."
       (erase-buffer)
       (let-alist ediff-review--current-comment
         (when .message (insert .message)))
-      (goto-char (point-max))
+
+      (when ediff-review-comment-major-mode
+        (funcall ediff-review-comment-major-mode))
       (ediff-review-comment-mode)
-      (select-window (get-buffer-window (current-buffer))))))
+      (select-window (get-buffer-window (current-buffer)))
+      (goto-char (point-max)))))
 
 (defun ediff-review-kill-comment ()
   "Kill comment at point."
