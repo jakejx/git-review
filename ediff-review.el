@@ -819,6 +819,51 @@ Optionally instruct function to SET-FILENAME."
             (define-key map (kbd "C-c C-k") #'ediff-review-kill-comment)
             map))
 
+;;;; Sage WIP
+
+(defun sage-publish-review-comments (review)
+  "Publish all unpublished comments in REVIEW."
+  (let-alist review
+    (let ((comments (thread-last .files
+                                 (seq-filter (lambda (file)
+                                               (let-alist file .comments)))
+                                 (seq-map (lambda (file)
+                                            (let-alist file
+                                              `(,.current-filename
+                                                .
+                                                ,(thread-last .comments
+                                                              (seq-map (lambda (it)
+                                                                         (let* ((comment (cdr it))
+                                                                                (range
+                                                                                 (let-alist comment
+                                                                                   `((start_line . ,(1+ .location.start-line))
+                                                                                     (start_character . ,.location.start-column)
+                                                                                     (end_line . ,(1+ .location.end-line))
+                                                                                     (end_character . ,.location.end-column)))))
+                                                                           `((side . ,(if (eq (let-alist comment .side) 'a) "PARENT" "REVISION"))
+                                                                             (range . ,range)
+                                                                             (message . ,(let-alist comment .message))))))
+                                                              (vconcat)))))))))
+      (sage--send-json-review `((comments . ,comments))))))
+
+(sage-publish-review-comments ediff-review)
+
+(defun sage--send-json-review (comments)
+  "Send COMMENTS as a json message."
+  (setq test-json-message (json-encode comments))
+  (let ((temp-file (make-temp-file "sage"))
+        (buffer (get-buffer-create "*sage-gerrit*")))
+    (with-current-buffer buffer
+      (erase-buffer))
+    (with-temp-file temp-file
+      (insert test-json-message))
+    (call-process-shell-command
+     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json 330958,1" temp-file)
+     nil buffer)
+    (message "Temp file: %s" temp-file)))
+
+
+
 (provide 'ediff-review)
 
 ;;; ediff-review.el ends here
