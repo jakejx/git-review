@@ -114,7 +114,8 @@
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (ediff-review--project-root)))
-    (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)))
+    (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
+    (ediff-review--restore-comment-overlays)))
 
 (defun ediff-review-close-review-file ()
   "Close current review file."
@@ -359,6 +360,11 @@
   (let-alist ediff-review
     (or .base-revision
         (concat .current-revision "~1"))))
+
+(defun ediff-review--has-comments-p (file)
+  "Return t if FILE has comments."
+  (let-alist (ediff-review--file-info file)
+    (not (null .comments))))
 
 (defun ediff-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."
@@ -656,6 +662,20 @@ Optionally instruct function to SET-FILENAME."
 
 ;;;; WIP Comments
 
+(defun ediff-review--restore-comment-overlays ()
+  "Restore comment overlays in the current file."
+  (when (ediff-review--has-comments-p (ediff-review--current-file))
+      (seq-do (lambda (it)
+                (let ((comment (cdr it)))
+                  (setq ediff-review--current-comment comment)
+                  (let-alist ediff-review--current-comment
+                    (setf (alist-get 'header-overlay ediff-review--current-comment) nil)
+                    (setf (alist-get 'comment-overlay ediff-review--current-comment) nil)
+                    (ediff-review--add-comment-overlay)
+                    (ediff-review--update-comments .id ediff-review--current-comment))
+                  (setq ediff-review--current-comment nil)))
+              (let-alist (ediff-review--file-info) .comments))))
+
 (defun ediff-review--add-comment-header-overlay ()
   "Add a comment header overlay."
   (let-alist ediff-review--current-comment
@@ -666,7 +686,8 @@ Optionally instruct function to SET-FILENAME."
         (let* ((ov (make-overlay (point) (point)))
                (user "Niklas Eklund")
                (time (format-time-string "%Y-%m-%d %a %H:%M:%S" (current-time)))
-               (comment-header (format "%s %s\n" user time)))
+               (summary (truncate-string-to-width (seq-elt (split-string .message "\n") 0) 30))
+               (comment-header (format "%s: %s... %s\n" user summary time)))
           (when .header-overlay
             (delete-overlay .header-overlay))
           (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
@@ -770,6 +791,7 @@ Optionally instruct function to SET-FILENAME."
   :lighter "Ediff Review"
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c C-'") #'ediff-review-comment)
+            (define-key map (kbd "C-c C-k") #'ediff-review-kill-comment)
             map))
 
 (provide 'ediff-review)
