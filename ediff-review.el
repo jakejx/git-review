@@ -47,6 +47,11 @@
   :type 'symbol
   :group 'ediff-review)
 
+(defcustom ediff-review-user nil
+  "The name of the user."
+  :type 'string
+  :group 'ediff-review)
+
 ;;;; Public
 
 (defvar ediff-review nil)
@@ -684,10 +689,9 @@ Optionally instruct function to SET-FILENAME."
         (goto-char .location.start-point)
         (beginning-of-line)
         (let* ((ov (make-overlay (point) (point)))
-               (user "Niklas Eklund")
                (time (format-time-string "%Y-%m-%d %a %H:%M:%S" (current-time)))
                (summary (truncate-string-to-width (seq-elt (split-string .message "\n") 0) 30))
-               (comment-header (format "%s: %s... %s\n" user summary time)))
+               (comment-header (format "%s: %s... %s\n" ediff-review-user summary time)))
           (when .header-overlay
             (delete-overlay .header-overlay))
           (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
