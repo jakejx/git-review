@@ -842,6 +842,7 @@ Optionally instruct function to SET-FILENAME."
                                                                                      (end_character . ,.location.end-column)))))
                                                                            `((side . ,(if (eq (let-alist comment .side) 'a) "PARENT" "REVISION"))
                                                                              (range . ,range)
+                                                                             (unresolved . ,t)
                                                                              (message . ,(let-alist comment .message))))))
                                                               (vconcat)))))))))
       (sage--send-json-review `((comments . ,comments))))))
