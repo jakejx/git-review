@@ -829,7 +829,7 @@ Optionally instruct function to SET-FILENAME."
                                                (let-alist file .comments)))
                                  (seq-map (lambda (file)
                                             (let-alist file
-                                              `(,.current-filename
+                                              `(,(if (string= "COMMIT_MSG" .current-filename) "/COMMIT_MSG" .current-filename)
                                                 .
                                                 ,(thread-last .comments
                                                               (seq-map (lambda (it)
