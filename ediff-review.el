@@ -799,7 +799,7 @@ Optionally instruct function to SET-FILENAME."
   "Quit review comment."
   (interactive)
   (setq ediff-review--current-comment nil)
-  (quit-restore-window))
+  (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 (define-minor-mode ediff-review-comment-mode
   "Mode for `ediff-review' comment."
