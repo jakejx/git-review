@@ -729,7 +729,7 @@ Optionally instruct function to SET-FILENAME."
 (defun ediff-review--create-comment ()
   "Create a new comment and return it."
   (let ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
-        (side (if (eq (current-buffer) ediff-buffer-A) 'a 'b))
+        (side (if (eq (current-buffer) ediff-review-base-revision-buffer) 'a 'b))
         (location
          `((start-line . ,(save-excursion (goto-char (mark)) (current-line)))
            (start-column . ,(save-excursion (goto-char (mark)) (current-column)))
