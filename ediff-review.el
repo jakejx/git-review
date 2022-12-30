@@ -63,15 +63,26 @@
   :type 'symbol
   :group 'ediff-review)
 
+(defcustom ediff-review-database-dir user-emacs-directory
+  "The directory to store the review database in."
+  :type 'string
+  :group 'ediff-review)
+
 ;;;; Public
 
-(defvar ediff-review nil)
-(defvar ediff-review-base-revision-buffer nil)
-(defvar ediff-review-current-revision-buffer nil)
+(defvar ediff-review nil
+  "Variable which holds all data related to the current review.")
+(defvar ediff-review-change nil
+  "Identifier for the current review.")
+(defvar ediff-review-base-revision-buffer nil
+  "Points to the buffer of the base revision.")
+(defvar ediff-review-current-revision-buffer nil
+  "Points to the buffer of the current revision.")
 
 ;;;; Private
 
 (defvar ediff-review--current-comment nil)
+(defvar ediff-review--reviews nil)
 
 ;;;; Faces
 
@@ -90,6 +101,51 @@
 
 ;;;; Functions
 
+(defun ediff-review-init-db ()
+  "Initialize the review database."
+  (unless ediff-review--reviews
+    (setq ediff-review--reviews
+          (let ((db (expand-file-name "ediff-review.db" ediff-review-database-dir)))
+            (when (file-exists-p db)
+              (with-temp-buffer
+                (insert-file-contents db)
+                (cl-assert (bobp))
+                (read (current-buffer))))))))
+
+(defun ediff-review-update-db ()
+  "Update the review database."
+  (let ((db (expand-file-name "ediff-review.db" ediff-review-database-dir)))
+    (with-temp-file db
+      (prin1 ediff-review--reviews (current-buffer)))))
+
+(defun ediff-review--update-review ()
+  "Update reviews with review.
+
+If review can already be found in an existing group update it
+otherwise create it."
+  (if-let ((grouped-reviews
+            (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
+      (if (seq-find (lambda (it)
+                      (and (equal (let-alist it .current-revision)
+                                  (let-alist ediff-review .current-revision))
+                           (equal (let-alist it .base-revision)
+                                  (let-alist ediff-review .base-revision))))
+                    grouped-reviews)
+          (setf (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)
+                (thread-last grouped-reviews
+                             (seq-map (lambda (it)
+                                        (if (and (equal (let-alist it .current-revision)
+                                                        (let-alist ediff-review .current-revision))
+                                                 (equal (let-alist it .base-revision)
+                                                        (let-alist ediff-review .base-revision)))
+                                            ediff-review
+                                          it)))
+                             (vconcat)))
+        (setf (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)
+              (vconcat (vconcat `(,ediff-review)) grouped-reviews)))
+    (setf (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)
+          (vconcat `(,ediff-review)))))
+
 (defun ediff-review-start-review ()
   "Start review."
   (let ((ediff-review-tab "Ediff-Review Review"))
@@ -99,7 +155,10 @@
                                (tab-bar-tabs))))
       (tab-bar-new-tab)
       (tab-bar-rename-tab ediff-review-tab)
-      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) 0))
+      (ediff-review-setup-project-file-review
+       (if-let ((current-file (ediff-review--current-file)))
+           current-file
+         (seq-elt (ediff-review--files) 0)))
       (ediff-review-file))))
 
 (defun ediff-review-setup-project-file-review (file)
@@ -140,6 +199,7 @@
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
     (ediff-review--store-buffer-locations)
+    (ediff-review--remove-file-comment-overlays)
     (ediff-review--store-progress)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
@@ -154,30 +214,31 @@
 
 (defun ediff-review--patchset-files ()
   "Determine which files to review."
-  (let* ((files-in-latest-commit
-          (split-string
-           (string-trim
-            (shell-command-to-string
-             (format "git diff --name-status %s..%s"
-                     (ediff-review--base-revision)
-                     (ediff-review--current-revision))))
-           "\n")))
-    (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
-    (setf (alist-get 'files ediff-review)
-          (seq-map (lambda (it)
-                     (let ((elements (split-string it)))
-                       (pcase elements
-                         (`(,type ,filename)
-                          (cons filename `((current-filename . ,filename)
-                                           (base-filename . ,filename)
-                                           (type . ,type)
-                                           (reviewed . nil))))
-                         (`(,type ,base-filename ,filename)
-                          (cons filename `((current-filename . ,filename)
-                                           (base-filename . ,base-filename)
-                                           (type . ,type)
-                                           (reviewed . nil)))))))
-                   files-in-latest-commit))))
+  (unless (let-alist ediff-review .files)
+    (let* ((files-in-latest-commit
+            (split-string
+             (string-trim
+              (shell-command-to-string
+               (format "git diff --name-status %s..%s"
+                       (ediff-review--base-revision)
+                       (ediff-review--current-revision))))
+             "\n")))
+      (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
+      (setf (alist-get 'files ediff-review)
+            (seq-map (lambda (it)
+                       (let ((elements (split-string it)))
+                         (pcase elements
+                           (`(,type ,filename)
+                            (cons filename `((current-filename . ,filename)
+                                             (base-filename . ,filename)
+                                             (type . ,type)
+                                             (reviewed . nil))))
+                           (`(,type ,base-filename ,filename)
+                            (cons filename `((current-filename . ,filename)
+                                             (base-filename . ,base-filename)
+                                             (type . ,type)
+                                             (reviewed . nil)))))))
+                     files-in-latest-commit)))))
 
 (defun ediff-review-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
@@ -197,26 +258,27 @@
 
 (defun ediff-review-branch-review-files (branch-a branch-b)
   "Set list of files based on BRANCH-A and BRANCH-B."
-  (ediff-review--patchset-files)
-  ;; Filter review files to only be modified in latest commits on
-  ;; branch-a and branch-b
-  (let* ((files-union
-          `("COMMIT_MSG" ,@(thread-last `(,branch-a ,branch-b)
-                                        (seq-map #'ediff-review-branch-modified-files)
-                                        (flatten-list))))
-         (review-files
-          (thread-last (ediff-review--files)
-                       (seq-filter (lambda (it)
-                                     (member it files-union)))
-                       (seq-remove #'ediff-review-file-rebased-p))))
-    ;; Update `ediff-review' with files
-    (let ((updated-files (alist-get 'files ediff-review)))
-      (seq-do (lambda (it)
-                (let ((file (car it)))
-                  (unless (member file review-files)
-                    (setf updated-files (assoc-delete-all file updated-files #'equal)))))
-              updated-files)
-      (setf (alist-get 'files ediff-review) updated-files))))
+  (unless (let-alist ediff-review .files)
+    (ediff-review--patchset-files)
+    ;; Filter review files to only be modified in latest commits on
+    ;; branch-a and branch-b
+    (let* ((files-union
+            `("COMMIT_MSG" ,@(thread-last `(,branch-a ,branch-b)
+                                          (seq-map #'ediff-review-branch-modified-files)
+                                          (flatten-list))))
+           (review-files
+            (thread-last (ediff-review--files)
+                         (seq-filter (lambda (it)
+                                       (member it files-union)))
+                         (seq-remove #'ediff-review-file-rebased-p))))
+      ;; Update `ediff-review' with files
+      (let ((updated-files (alist-get 'files ediff-review)))
+        (seq-do (lambda (it)
+                  (let ((file (car it)))
+                    (unless (member file review-files)
+                      (setf updated-files (assoc-delete-all file updated-files #'equal)))))
+                updated-files)
+        (setf (alist-get 'files ediff-review) updated-files)))))
 
 (defun ediff-review-hunk-regions (base-revision current-revision base-file current-file)
   "Hunk regions for BASE-REVISION:BASE-FILE and CURRENT-REVISION:CURRENT-FILE."
@@ -266,6 +328,10 @@
   "Quit `ediff-review' review."
   (interactive)
   (ediff-review-close-review-file)
+  (ediff-review--update-review)
+  (ediff-review-update-db)
+  (setq ediff-review-change nil)
+  (setq ediff-review nil)
   (tab-bar-close-tab))
 
 (defun ediff-review-next-hunk ()
@@ -340,6 +406,8 @@
 (defun ediff-review-patchset ()
   "Review current patch-set."
   (interactive)
+  (unless ediff-review-change
+    (setq ediff-review-change (ediff-review--current-git-branch)))
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review--patchset-files)
@@ -349,6 +417,8 @@
 (defun ediff-review-patchsets ()
   "Review the difference between two patch-sets."
   (interactive)
+  (unless ediff-review-change
+    (setq ediff-review-change (ediff-review--current-git-branch)))
   (let* ((default-directory (project-root (project-current))))
     (when-let ((base-revision (completing-read "Select base revision: "
                                                (ediff-review--other-git-branches)))
@@ -464,11 +534,20 @@ Unless COMMENT is nil, then delete ID."
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
   "Initialize review of CURRENT-REVISION.
 
-If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
-  (setq ediff-review `((base-revision . ,base-revision)
-                       (current-revision . ,current-revision)
-                       (multiple-patchsets . ,(not (null base-revision)))
-                       (project . ,default-directory))))
+If a BASE-REVISION is provided it indicates multiple patch-sets review."
+  (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
+    (setq ediff-review
+          (seq-find (lambda (it)
+                     (and (equal (let-alist it .current-revision)
+                                 current-revision)
+                          (equal (let-alist it .base-revision)
+                                 base-revision)))
+                   grouped-reviews)))
+  (unless ediff-review
+    (setq ediff-review `((base-revision . ,base-revision)
+                         (current-revision . ,current-revision)
+                         (multiple-patchsets . ,(not (null base-revision)))
+                         (project . ,default-directory)))))
 
 (defun ediff-review--restore-buffer-location ()
   "Restore buffer location to nearest diff in revision buffer.
@@ -750,6 +829,19 @@ Optionally instruct function to SET-FILENAME."
           (overlay-put ov 'ediff-review-comment .id)
           (overlay-put ov 'face 'ansi-color-fast-blink)))
       (ediff-review--add-comment-header-overlay))))
+
+(defun ediff-review--remove-file-comment-overlays ()
+  "Remove all overlays in the comments.
+
+This is required since we can't serialize the overlays and store them
+in the database.  Plus storing them doesn't make sense."
+  (let* ((comments (let-alist (ediff-review--file-info) .comments)))
+    (seq-do (lambda (it)
+              (pcase-let ((`(,id . ,comment) it))
+                (setf comment (assoc-delete-all 'header-overlay comment))
+                (setf comment (assoc-delete-all 'comment-overlay comment))
+                (ediff-review--update-comments id comment)))
+            comments)))
 
 (defun ediff-review--create-comment ()
   "Create a new comment and return it."
