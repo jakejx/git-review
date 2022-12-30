@@ -131,7 +131,8 @@
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (ediff-review--project-root)))
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
-    (ediff-review--restore-comment-overlays)))
+    (ediff-review--restore-comment-overlays)
+    (ediff-review--restore-buffer-location)))
 
 (defun ediff-review-close-review-file ()
   "Close current review file."
@@ -456,17 +457,25 @@ If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
                        (multiple-patchsets . ,(not (null base-revision)))
                        (project . ,default-directory))))
 
-(defun ediff-review--restore-buffer-locations ()
-  "Restore buffer locations if current file has been reviewed before."
-  ;; TODO(Niklas Eklund, 20221228): This function needs some more thoughts
+(defun ediff-review--restore-buffer-location ()
+  "Restore buffer location to nearest diff in revision buffer.
+
+This is done for files that has already been reviewed before and where
+there is a previous location to return to."
   (let-alist (ediff-review--file-info)
     (when .buffer-location
-      (with-selected-window (get-buffer-window ediff-review-base-revision-buffer)
-        (goto-char .buffer-location.a)
-        (recenter))
       (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
-        (goto-char .buffer-location.b)
-        (recenter)))))
+        (goto-char .buffer-location.b))
+      (with-selected-window (ediff-review--control-window)
+        (let ((last-command-event ?b))
+          (ediff-jump-to-difference-at-point nil))))))
+
+(defun ediff-review--control-window ()
+  "Return window for variable `ediff-control-buffer'."
+  (seq-find (lambda (it)
+              (with-selected-window it
+                ediff-control-buffer))
+            (window-list)))
 
 (defun ediff-review--file-content (revision file buffer &optional set-filename)
   "Populate BUFFER with FILE content from REVISION.
