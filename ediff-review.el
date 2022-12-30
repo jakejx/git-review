@@ -728,15 +728,17 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review--create-comment ()
   "Create a new comment and return it."
-  (let ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
-        (side (if (eq (current-buffer) ediff-review-base-revision-buffer) 'a 'b))
-        (location
-         `((start-line . ,(save-excursion (goto-char (mark)) (current-line)))
-           (start-column . ,(save-excursion (goto-char (mark)) (current-column)))
-           (start-point . ,(mark))
-           (end-line . ,(save-excursion (goto-char (point)) (current-line)))
-           (end-column . ,(save-excursion (goto-char (point)) (current-column)))
-           (end-point . ,(point)))))
+  (let* ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
+         (side (if (eq (current-buffer) ediff-review-base-revision-buffer) 'a 'b))
+         (start-position (min (mark) (point)))
+         (end-position (max (mark) (point)))
+         (location
+          `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
+            (start-column . ,(save-excursion (goto-char start-position) (current-column)))
+            (start-point . ,start-position)
+            (end-line . ,(save-excursion (goto-char end-position) (current-line)))
+            (end-column . ,(save-excursion (goto-char end-position) (current-column)))
+            (end-point . ,end-position))))
     `((id . ,id)
       (side . ,side)
       (published . ,nil)
