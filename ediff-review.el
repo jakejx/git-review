@@ -327,6 +327,15 @@
     (ediff-review-setup-project-file-review file)
     (ediff-review-file)))
 
+(defun ediff-review-switch-to-most-recent-file ()
+  "Switch to most recently reviewed file."
+  (interactive)
+  (when-let* ((recent-file (ediff-review--most-recent-file)))
+    (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
+    (ediff-review-close-review-file)
+    (ediff-review-setup-project-file-review recent-file)
+    (ediff-review-file)))
+
 ;;;###autoload
 (defun ediff-review-patchset ()
   "Review current patch-set."
@@ -394,6 +403,10 @@
 (defun ediff-review--current-file ()
   "Return the name of the current file being reviewed."
   (let-alist ediff-review .current-file))
+
+(defun ediff-review--most-recent-file ()
+  "Return the name of the most recently reviewed file."
+  (let-alist ediff-review .recent-file))
 
 (defun ediff-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
@@ -674,6 +687,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "p") #'ediff-review-previous-hunk)
     (define-key map (kbd "]") #'ediff-review-next-file)
     (define-key map (kbd "[") #'ediff-review-previous-file)
+    (define-key map (kbd "^") #'ediff-review-switch-to-most-recent-file)
     map))
 
 (define-derived-mode ediff-review-mode fundamental-mode "Ediff Review"
