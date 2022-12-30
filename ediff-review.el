@@ -68,6 +68,13 @@
   :type 'string
   :group 'ediff-review)
 
+(defcustom ediff-review-comment-buffer-action
+  '(display-buffer-at-bottom
+    (window-height . 0.33))
+  "The action used to display a comment."
+  :group 'ediff-review
+  :type 'sexp)
+
 ;;;; Public
 
 (defvar ediff-review nil
@@ -874,9 +881,7 @@ in the database.  Plus storing them doesn't make sense."
                         (cdr)))
          (ediff-review--create-comment)))
   (let* ((buffer (get-buffer-create "*ediff-review-comment*")))
-    (display-buffer buffer '(display-buffer-in-side-window
-                             (side . bottom)
-                             (dedicated . t)))
+    (display-buffer buffer ediff-review-comment-buffer-action)
     (with-current-buffer buffer
       (erase-buffer)
       (let-alist ediff-review--current-comment
