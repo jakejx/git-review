@@ -945,8 +945,56 @@ in the database.  Plus storing them doesn't make sense."
 
 ;;;; Sage WIP
 
-(defun sage-publish-review-comments (review)
-  "Publish all unpublished comments in REVIEW."
+(defun sage--query-change (change-number project)
+  "Query CHANGE-NUMBER in PROJECT."
+  (let ((sage-gerrit-url "gerrit.cicd.autoheim.net")
+        (sage-gerrit-port "29418"))
+    (with-temp-buffer
+      (call-process-shell-command
+       (format "ssh -p %s %s gerrit query --format=JSON --current-patch-set \"project:%s change:%s\""
+               sage-gerrit-port sage-gerrit-url
+               project change-number)
+       nil t)
+      (goto-char (point-min))
+      (json-parse-buffer :array-type 'array
+                         :object-type 'alist
+                         :null-object nil
+                         :false-object nil))))
+
+(defun sage--download-ref ()
+  "Download change and put in branch."
+  (let* ((default-directory "~/src/src")
+         (project "src")
+         (change-number 330750)
+         (patchset 10)
+         (change (sage--query-change change-number project))
+         (ref (let-alist change .currentPatchSet.ref))
+         (general-ref
+          (string-join (butlast (split-string ref "/")) "/"))
+         (sage-gerrit-url "gerrit.cicd.autoheim.net")
+         (sage-gerrit-port "29418")
+         (sage-gerrit-user "s0000034"))
+    (call-process-shell-command
+     (format "git fetch ssh://%s@%s:%s/%s %s/%s && git branch review/change-%s,%s"
+             sage-gerrit-user
+             sage-gerrit-url
+             sage-gerrit-port
+             project
+             general-ref
+             patchset
+             change-number
+             patchset))))
+
+;; Publish review comments
+;; (sage-publish-review-comments ediff-review "330767" "4")
+
+(defun sage-publish-review-comments (review change patchset)
+  "Publish all unpublished comments in REVIEW on CHANGE's PATCHSET."
+  ;; TODO(Niklas Eklund, 20221230): Need to add check for multi
+  ;; patchset comments. It doesn't seem like base-revision can be
+  ;; properly refered to. Can probably do a hack that if a comment is
+  ;; about to get added it will open the location in the browser
+  ;; instead?
   (let-alist review
     (let ((comments (thread-last .files
                                  (seq-filter (lambda (file)
@@ -969,12 +1017,10 @@ in the database.  Plus storing them doesn't make sense."
                                                                              (unresolved . ,t)
                                                                              (message . ,(let-alist comment .message))))))
                                                               (vconcat)))))))))
-      (sage--send-json-review `((comments . ,comments))))))
+      (sage--send-json-review `((comments . ,comments)) change patchset))))
 
-(sage-publish-review-comments ediff-review)
-
-(defun sage--send-json-review (comments)
-  "Send COMMENTS as a json message."
+(defun sage--send-json-review (comments change patchset)
+  "Send COMMENTS on CHANGE's PATCHSET as json data."
   (setq test-json-message (json-encode comments))
   (let ((temp-file (make-temp-file "sage"))
         (buffer (get-buffer-create "*sage-gerrit*")))
@@ -983,11 +1029,9 @@ in the database.  Plus storing them doesn't make sense."
     (with-temp-file temp-file
       (insert test-json-message))
     (call-process-shell-command
-     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json 330958,1" temp-file)
+     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json %s,%s" temp-file change patchset)
      nil buffer)
     (message "Temp file: %s" temp-file)))
-
-
 
 (provide 'ediff-review)
 
