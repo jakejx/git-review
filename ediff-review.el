@@ -476,7 +476,9 @@ If a BASE-REVISION is provided it indicates multiple patch-sets reivew."
 This is done for files that has already been reviewed before and where
 there is a previous location to return to."
   (let-alist (ediff-review--file-info)
-    (when .buffer-location
+    (when (and .buffer-location
+               ; `ediff' complains when location is at start of buffer
+               (> .buffer-location.b 1))
       (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
         (goto-char .buffer-location.b))
       (with-selected-window (ediff-review--control-window)
