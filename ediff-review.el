@@ -42,11 +42,6 @@
 
 ;;;; Customizable
 
-(defcustom ediff-review-open-in-browser nil
-  "Function to open a review location in the browser."
-  :type 'symbol
-  :group 'ediff-review)
-
 (defcustom ediff-review-user nil
   "The name of the user."
   :type 'string
@@ -440,16 +435,6 @@ otherwise create it."
                                           (ediff-review--current-revision))
         (ediff-review-start-review)))))
 
-(defun ediff-review-browse-a ()
-  "Open side a in browser."
-  (interactive)
-  (funcall ediff-review-open-in-browser 'a))
-
-(defun ediff-review-browse-b ()
-  "Open side b in browser."
-  (interactive)
-  (funcall ediff-review-open-in-browser 'b))
-
 ;;;; Support functions
 
 (defun ediff-review--project-root ()
@@ -767,8 +752,6 @@ Optionally instruct function to SET-FILENAME."
 
 (defvar ediff-review-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "ba") #'ediff-review-browse-a)
-    (define-key map (kbd "bb") #'ediff-review-browse-b)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'ediff-review-quit)
