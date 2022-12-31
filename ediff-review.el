@@ -111,13 +111,15 @@
 (defun ediff-review-init-db ()
   "Initialize the review database."
   (unless ediff-review--reviews
-    (setq ediff-review--reviews
-          (let ((db (expand-file-name "ediff-review.db" ediff-review-database-dir)))
-            (when (file-exists-p db)
-              (with-temp-buffer
-                (insert-file-contents db)
-                (cl-assert (bobp))
-                (read (current-buffer))))))))
+    (let ((db (expand-file-name "ediff-review.db" ediff-review-database-dir)))
+      (if (file-exists-p db)
+          (setq ediff-review--reviews
+                (with-temp-buffer
+                  (insert-file-contents db)
+                  (cl-assert (bobp))
+                  (read (current-buffer))))
+        (make-empty-file db t)
+        (setq ediff-review--reviews nil)))))
 
 (defun ediff-review-update-db ()
   "Update the review database."
