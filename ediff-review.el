@@ -435,6 +435,18 @@ otherwise create it."
                                           (ediff-review--current-revision))
         (ediff-review-start-review)))))
 
+(defun ediff-review-jump-to-a ()
+  "Jump to base revision buffer."
+  (interactive)
+  (select-window
+   (get-buffer-window ediff-review-base-revision-buffer)))
+
+(defun ediff-review-jump-to-b ()
+  "Jump to current revision buffer."
+  (interactive)
+  (select-window
+   (get-buffer-window ediff-review-current-revision-buffer)))
+
 ;;;; Support functions
 
 (defun ediff-review--project-root ()
@@ -752,6 +764,8 @@ Optionally instruct function to SET-FILENAME."
 
 (defvar ediff-review-mode-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "a") #'ediff-review-jump-to-a)
+    (define-key map (kbd "b") #'ediff-review-jump-to-b)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'ediff-review-quit)
