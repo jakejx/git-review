@@ -47,12 +47,6 @@
   :type 'string
   :group 'ediff-review)
 
-(defcustom ediff-review-comment-renderer-function
-  #'ediff-review--comment-renderer
-  "Function to render a comment."
-  :type 'symbol
-  :group 'ediff-review)
-
 (defcustom ediff-review-comment-major-mode nil
   "Defines the major mode to use in comment mode."
   :type 'symbol
@@ -787,10 +781,6 @@ Optionally instruct function to SET-FILENAME."
 
 
 ;;;; WIP Comments
-
-(defun ediff-review--comment-renderer (comment)
-  "Default renderer for COMMENT."
-  (let-alist comment .message))
 
 (defun ediff-review--restore-comment-overlays ()
   "Restore comment overlays in the current file."
