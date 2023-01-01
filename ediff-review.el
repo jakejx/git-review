@@ -64,6 +64,24 @@
   :group 'ediff-review
   :type 'sexp)
 
+(defcustom ediff-review-file-annotation
+  '((:name filename :function identity)
+    (:name type :function ediff-review--annotation-file-type :face 'font-lock-comment-face)
+    (:name reviewed :function ediff-review--annotation-file-reviewed :face 'font-lock-string-face))
+  "A list of annotations to display for a review file.
+
+Each entry in the list is a property list with the following properties:
+- :name
+- :function
+- :align
+- :face
+- :width"
+  :group 'ediff-review
+  :type '(repeat (plist :options ((:name symbol)
+                                  (:function symbol)
+                                  (:align symbol)
+                                  (:face symbol)))))
+
 ;;;; Public
 
 (defvar ediff-review nil
@@ -375,7 +393,9 @@ otherwise create it."
 (defun ediff-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let* ((candidates (ediff-review---file-candidates))
+  (when-let* ((candidates (ediff-review--candidate-annotations
+                           (ediff-review--files)
+                           ediff-review-file-annotation))
               (metadata `(metadata
                           (category . ediff-review-file)
                           (cycle-sort-function . identity)
@@ -695,20 +715,6 @@ Optionally instruct function to SET-FILENAME."
     (funcall update-overlay-fun 'a)
     (funcall update-overlay-fun 'b)))
 
-(defun ediff-review---file-candidates ()
-  "Return an alist of file candidates."
-  (thread-last (ediff-review--files)
-               (seq-map-indexed (lambda (it index)
-                                  (let* ((file-info
-                                          (let-alist ediff-review
-                                            (alist-get it .files nil nil #'equal)))
-                                         (status-str (pcase (let-alist file-info .type)
-                                                       ("A" "ADDED")
-                                                       ("D" "DELETED")
-                                                       ("M" "MODIFIED")
-                                                       (_ "RENAMED"))))
-                                    `(,(format "%s %s %s" (1+ index) it status-str) . ,it))))))
-
 (defun ediff-review--parse-review-hunk (hunk)
   "Parse HUNK into a property list."
   (pcase-let ((`(,start ,length)
@@ -757,6 +763,70 @@ Optionally instruct function to SET-FILENAME."
     (thread-last branches
                  (seq-remove (lambda (it) (string-prefix-p "*" it)))
                  (seq-map #'string-trim))))
+
+(defun ediff-review--annotations (candidates annotation-config)
+  "Return annotations of CANDIDATES according to ANNOTATION-CONFIG."
+  (thread-last candidates
+               (seq-map (lambda (candidate)
+                          (thread-last annotation-config
+                                       (seq-map (lambda (config)
+                                                  `(,(plist-get config :name) .
+                                                    ,(funcall (plist-get config :function) candidate)))))))
+               (vconcat)))
+
+(defun ediff-review--annotation-widths (annotations annotation-config)
+  "Return widths of ANNOTATIONS according to ANNOTATION-CONFIG."
+  (seq-map (lambda (config)
+             `(,(plist-get config :name) .
+               ,(thread-last annotations
+                             (seq-map (lambda (it) (length (alist-get (plist-get config :name) it))))
+                             (funcall (lambda (it)
+                                        (if-let ((max-width (plist-get config :width)))
+                                            (min (seq-max it) max-width)
+                                          (seq-max it)))))))
+           annotation-config))
+
+(defun ediff-review--candidate-annotations (candidates annotation-config)
+  "Return annotated CANDIDATES according to ANNOTATION-CONFIG."
+  (let* ((annotations (ediff-review--annotations candidates
+                                                 annotation-config))
+         (annotation-widths (ediff-review--annotation-widths annotations
+                                                             annotation-config)))
+    (cl-mapcar (lambda (candidate annotation)
+                 `(,(cl-loop for config in annotation-config
+                             concat
+                             (let* ((padding 3)
+                                    (str (alist-get (plist-get config :name) annotation))
+                                    (width (alist-get (plist-get config :name) annotation-widths))
+                                    (new-str
+                                     (if-let* ((align (plist-get config :align))
+                                               (align-right (eq 'right align)))
+                                         (concat (make-string (- width (length str)) ?\s)
+                                                 str (make-string padding ?\s))
+                                       (concat
+                                        (truncate-string-to-width str width 0 ?\s)
+                                        (make-string padding ?\s)))))
+                               (if-let ((face (plist-get config :face)))
+                                   (propertize new-str 'face face)
+                                 new-str)))
+                   . ,candidate))
+               candidates annotations)))
+
+(defun ediff-review--annotation-file-type (file)
+  "Return FILE's type."
+  (let-alist (ediff-review--file-info file)
+    (pcase .type
+      ("A" "ADDED")
+      ("D" "DELETED")
+      ("M" "MODIFIED")
+      (_ "RENAMED"))))
+
+(defun ediff-review--annotation-file-reviewed (file)
+  "Return FILE's review status."
+  (let-alist (ediff-review--file-info file)
+    (if .reviewed
+        "REVIEWED"
+      "")))
 
 ;;;; Major modes
 
