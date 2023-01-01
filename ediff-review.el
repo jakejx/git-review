@@ -206,6 +206,8 @@ otherwise create it."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (ediff-review--project-root)))
+    (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
+    (ediff-review--store-progress)
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
     (ediff-review--restore-comment-overlays)
     (ediff-review--restore-buffer-location)))
@@ -214,10 +216,8 @@ otherwise create it."
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
-    (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
     (ediff-review--store-buffer-locations)
     (ediff-review--remove-file-comment-overlays)
-    (ediff-review--store-progress)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -248,13 +248,11 @@ otherwise create it."
                            (`(,type ,filename)
                             (cons filename `((current-filename . ,filename)
                                              (base-filename . ,filename)
-                                             (type . ,type)
-                                             (reviewed . nil))))
+                                             (type . ,type))))
                            (`(,type ,base-filename ,filename)
                             (cons filename `((current-filename . ,filename)
                                              (base-filename . ,base-filename)
-                                             (type . ,type)
-                                             (reviewed . nil)))))))
+                                             (type . ,type)))))))
                      files-in-latest-commit)))))
 
 (defun ediff-review-branch-modified-files (branch)
@@ -513,6 +511,10 @@ otherwise create it."
 (defun ediff-review--most-recent-file ()
   "Return the name of the most recently reviewed file."
   (let-alist ediff-review .recent-file))
+
+(defun ediff-review--progress ()
+  "Return review progress."
+  (or (let-alist ediff-review .progress) 0.0))
 
 (defun ediff-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
@@ -776,6 +778,18 @@ Optionally instruct function to SET-FILENAME."
                  (seq-remove (lambda (it) (string-prefix-p "*" it)))
                  (seq-map #'string-trim))))
 
+(defun ediff-review--review-buffer-name ()
+  "Return the name of the review buffer."
+  (let ((file-index
+         (1+ (cl-position
+              (ediff-review--current-file) (ediff-review--files) :test #'equal)))
+        (number-of-files (length (ediff-review--files)))
+        (progress (* (ediff-review--progress) 100)))
+    (format "*Ediff Review: [%s/%s] %s%%*"
+          file-index
+          number-of-files
+          progress)))
+
 (defun ediff-review--annotations (candidates annotation-config)
   "Return annotations of CANDIDATES according to ANNOTATION-CONFIG."
   (thread-last candidates
@@ -866,12 +880,7 @@ Optionally instruct function to SET-FILENAME."
 
 (define-derived-mode ediff-review-mode fundamental-mode "Ediff Review"
   (read-only-mode)
-  (rename-buffer
-   (format "*Ediff Review: [%s/%s]"
-           (1+ (cl-position
-                (ediff-review--current-file) (ediff-review--files) :test #'equal))
-           (length (ediff-review--files)))))
-
+  (rename-buffer (ediff-review--review-buffer-name)))
 
 ;;;; WIP Comments
 
