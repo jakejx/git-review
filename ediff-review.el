@@ -427,10 +427,13 @@ otherwise create it."
   (interactive "P")
   (unless ediff-review-change
     (setq ediff-review-change
-          (if select-branch
-              (completing-read "Select base revision: "
-                               (ediff-review--other-git-branches))
-            (ediff-review--current-git-branch))))
+          (format "%s@%s"
+                  (if-let ((branch (and select-branch
+                                        (completing-read "Select base revision: "
+                                                         (ediff-review--other-git-branches)))))
+                      branch
+                    (ediff-review--current-git-branch))
+                  (project-root (project-current)))))
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review--patchset-files)
@@ -441,7 +444,10 @@ otherwise create it."
   "Review the difference between two patch-sets."
   (interactive)
   (unless ediff-review-change
-    (setq ediff-review-change (ediff-review--current-git-branch)))
+    (setq ediff-review-change
+          (format "%s@%s"
+                  (ediff-review--current-git-branch)
+                  (project-root (project-current)))))
   (let* ((default-directory (project-root (project-current))))
     (when-let ((base-revision (completing-read "Select base revision: "
                                                (ediff-review--other-git-branches)))
