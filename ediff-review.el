@@ -206,8 +206,6 @@ otherwise create it."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (ediff-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (ediff-review--project-root)))
-    (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
-    (ediff-review--store-progress)
     (ediff-buffers ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
     (ediff-review--restore-comment-overlays)
     (ediff-review--restore-buffer-location)))
@@ -354,7 +352,8 @@ otherwise create it."
   (interactive)
   (ediff-review--restore-overlays)
   (ediff-next-difference)
-  (ediff-review---maybe-modify-overlays))
+  (ediff-review---maybe-modify-overlays)
+  (ediff-review--maybe-set-reviewed))
 
 (defun ediff-review-previous-hunk ()
   "Go to previous hunk."
@@ -495,6 +494,11 @@ otherwise create it."
   "Return t if FILE has comments."
   (let-alist (ediff-review--file-info file)
     (not (null .comments))))
+
+(defun ediff-review--is-reviewed-p (file)
+  "Return t if FILE is reviewed."
+  (let-alist (ediff-review--file-info file)
+    (not (null .reviewed))))
 
 (defun ediff-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."
@@ -729,6 +733,15 @@ Optionally instruct function to SET-FILENAME."
     (funcall update-overlay-fun 'a)
     (funcall update-overlay-fun 'b)))
 
+(defun ediff-review--maybe-set-reviewed ()
+  "Set file to reviewed if the last diff has been reached."
+  (when (and (not (ediff-review--is-reviewed-p (ediff-review--current-file)))
+         (= (1+ ediff-current-difference) ediff-number-of-differences))
+    (ediff-review--update-file (ediff-review--current-file) 'reviewed t)
+    (ediff-review--store-progress)
+    (with-current-buffer (window-buffer (ediff-review--control-window))
+      (rename-buffer (ediff-review--review-buffer-name)))))
+
 (defun ediff-review--parse-review-hunk (hunk)
   "Parse HUNK into a property list."
   (pcase-let ((`(,start ,length)
@@ -786,9 +799,9 @@ Optionally instruct function to SET-FILENAME."
         (number-of-files (length (ediff-review--files)))
         (progress (* (ediff-review--progress) 100)))
     (format "*Ediff Review: [%s/%s] %s%%*"
-          file-index
-          number-of-files
-          progress)))
+            file-index
+            number-of-files
+            progress)))
 
 (defun ediff-review--annotations (candidates annotation-config)
   "Return annotations of CANDIDATES according to ANNOTATION-CONFIG."
@@ -880,7 +893,8 @@ Optionally instruct function to SET-FILENAME."
 
 (define-derived-mode ediff-review-mode fundamental-mode "Ediff Review"
   (read-only-mode)
-  (rename-buffer (ediff-review--review-buffer-name)))
+  (rename-buffer
+   (ediff-review--review-buffer-name)))
 
 ;;;; WIP Comments
 
