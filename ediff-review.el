@@ -67,7 +67,8 @@
 (defcustom ediff-review-file-annotation
   '((:name filename :function identity)
     (:name type :function ediff-review--annotation-file-type :face 'font-lock-comment-face)
-    (:name reviewed :function ediff-review--annotation-file-reviewed :face 'font-lock-string-face))
+    (:name reviewed :function ediff-review--annotation-file-reviewed :face 'font-lock-string-face)
+    (:name comments :function ediff-review--annotation-file-comments :face 'font-lock-string-face))
   "A list of annotations to display for a review file.
 
 Each entry in the list is a property list with the following properties:
@@ -831,6 +832,13 @@ Optionally instruct function to SET-FILENAME."
   (let-alist (ediff-review--file-info file)
     (if .reviewed
         "REVIEWED"
+      "")))
+
+(defun ediff-review--annotation-file-comments (file)
+  "Return FILE's comments status."
+  (let-alist (ediff-review--file-info file)
+    (if .comments
+        (format "COMMENTS(%s)" (length .comments))
       "")))
 
 ;;;; Major modes
