@@ -401,11 +401,15 @@ otherwise create it."
     (ediff-review-file)))
 
 ;;;###autoload
-(defun ediff-review-patchset ()
-  "Review current patch-set."
-  (interactive)
+(defun ediff-review-patchset (select-branch)
+  "Review current patch-set or SELECT-BRANCH."
+  (interactive "P")
   (unless ediff-review-change
-    (setq ediff-review-change (ediff-review--current-git-branch)))
+    (setq ediff-review-change
+          (if select-branch
+              (completing-read "Select base revision: "
+                               (ediff-review--other-git-branches))
+            (ediff-review--current-git-branch))))
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review--patchset-files)
