@@ -892,7 +892,7 @@ Optionally instruct function to SET-FILENAME."
         (beginning-of-line)
         (let* ((ov (make-overlay (point) (point)))
                (time (format-time-string "%Y-%m-%d %a %H:%M:%S" (current-time)))
-               (comment-message (funcall ediff-review-comment-renderer-function ediff-review--current-comment))
+               (comment-message (let-alist ediff-review--current-comment .message))
                (summary (seq-elt (split-string comment-message "\n") 0))
                (summary-str (truncate-string-to-width summary 30))
                (comment-header (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") " " time "\n")))
