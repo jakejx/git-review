@@ -465,6 +465,11 @@ otherwise create it."
   (select-window
    (get-buffer-window ediff-review-current-revision-buffer)))
 
+(defun ediff-review-jump-to-control ()
+  "Jump to control buffer."
+  (interactive)
+  (select-window (ediff-review--control-window)))
+
 ;;;; Support functions
 
 (defun ediff-review--project-root ()
@@ -1002,6 +1007,7 @@ in the database.  Plus storing them doesn't make sense."
   :global nil
   :lighter "Ediff Review"
   :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "C-c C-c") #'ediff-review-jump-to-control)
             (define-key map (kbd "C-c C-'") #'ediff-review-comment)
             (define-key map (kbd "C-c C-k") #'ediff-review-kill-comment)
             map))
