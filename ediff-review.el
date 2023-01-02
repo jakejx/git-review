@@ -1,6 +1,6 @@
 ;;; ediff-review.el --- Review patch sets with Ediff -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022 Niklas Eklund
+;; Copyright (C) 2022-2023 Niklas Eklund
 
 ;; Author: Niklas Eklund <niklas.eklund@posteo.net>
 ;; Maintainer: Niklas Eklund <niklas.eklund@posteo.net>
