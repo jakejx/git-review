@@ -245,28 +245,7 @@ otherwise create it."
 (defun ediff-review--patchset-files ()
   "Determine which files to review."
   (unless (let-alist ediff-review .files)
-    (let* ((files-in-latest-commit
-            (split-string
-             (string-trim
-              (shell-command-to-string
-               (format "git diff --name-status %s..%s"
-                       (ediff-review--base-revision)
-                       (ediff-review--current-revision))))
-             "\n")))
-      (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
-      (setf (alist-get 'files ediff-review)
-            (seq-map (lambda (it)
-                       (let ((elements (split-string it)))
-                         (pcase elements
-                           (`(,type ,filename)
-                            (cons filename `((current-filename . ,filename)
-                                             (base-filename . ,filename)
-                                             (type . ,type))))
-                           (`(,type ,base-filename ,filename)
-                            (cons filename `((current-filename . ,filename)
-                                             (base-filename . ,base-filename)
-                                             (type . ,type)))))))
-                     files-in-latest-commit)))))
+    ))
 
 (defun ediff-review-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
@@ -446,7 +425,6 @@ otherwise create it."
                   (project-root (project-current)))))
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
-    (ediff-review--patchset-files)
     (ediff-review-start-review)))
 
 ;;;###autoload
@@ -464,11 +442,7 @@ otherwise create it."
                (current-revision (ediff-review--current-git-branch)))
       (ediff-review--initialize-review current-revision
                                        base-revision)
-      (when (and (ediff-review--base-revision)
-                 (ediff-review--current-revision))
-        (ediff-review-branch-review-files (ediff-review--base-revision)
-                                          (ediff-review--current-revision))
-        (ediff-review-start-review)))))
+      (ediff-review-start-review))))
 
 (defun ediff-review-publish-review ()
   "Publish review."
@@ -616,16 +590,42 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
   (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
     (setq ediff-review
           (seq-find (lambda (it)
-                     (and (equal (let-alist it .current-revision)
-                                 current-revision)
-                          (equal (let-alist it .base-revision)
-                                 base-revision)))
-                   grouped-reviews)))
+                      (and (equal (let-alist it .current-revision)
+                                  current-revision)
+                           (equal (let-alist it .base-revision)
+                                  base-revision)))
+                    grouped-reviews)))
   (unless ediff-review
     (setq ediff-review `((base-revision . ,base-revision)
                          (current-revision . ,current-revision)
                          (multiple-patchsets . ,(not (null base-revision)))
-                         (project . ,default-directory)))))
+                         (project . ,default-directory)))
+    ;; Update review with files
+    (let* ((files-in-latest-commit
+            (split-string
+             (string-trim
+              (shell-command-to-string
+               (format "git diff --name-status %s..%s"
+                       (ediff-review--base-revision)
+                       (ediff-review--current-revision))))
+             "\n")))
+      (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
+      (setf (alist-get 'files ediff-review)
+            (seq-map (lambda (it)
+                       (let ((elements (split-string it)))
+                         (pcase elements
+                           (`(,type ,filename)
+                            (cons filename `((current-filename . ,filename)
+                                             (base-filename . ,filename)
+                                             (type . ,type))))
+                           (`(,type ,base-filename ,filename)
+                            (cons filename `((current-filename . ,filename)
+                                             (base-filename . ,base-filename)
+                                             (type . ,type)))))))
+                     files-in-latest-commit)))
+    (when (ediff-review--multiple-patchsets-p)
+      (ediff-review-branch-review-files (ediff-review--base-revision)
+                                        (ediff-review--current-revision)))))
 
 (defun ediff-review--restore-buffer-location ()
   "Restore buffer location to nearest diff in revision buffer.
