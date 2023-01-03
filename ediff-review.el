@@ -88,6 +88,11 @@ Each entry in the list is a property list with the following properties:
                                   (:align symbol)
                                   (:face symbol)))))
 
+(defcustom ediff-review-ignore-file-predicates nil
+  "A list of predicates for determining if a file should be ignored."
+  :group 'ediff-review
+  :type '(repeat symbol))
+
 ;;;; Public
 
 (defvar ediff-review nil
@@ -512,6 +517,12 @@ otherwise create it."
   "Return t if FILE is reviewed."
   (let-alist (ediff-review--file-info file)
     (not (null .reviewed))))
+
+(defun ediff-review--ignore-file-p (file)
+  "Return t if FILE should be ignored."
+  (seq-find (lambda (predicate)
+              (funcall predicate file))
+            ediff-review-ignore-file-predicates))
 
 (defun ediff-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."

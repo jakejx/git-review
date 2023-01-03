@@ -42,6 +42,14 @@
                 '((:begin 18 :end 33))
                 '((:begin 34 :end 40))))))
 
+(ert-deftest ediff-review-test-ignore-file-p ()
+  (let ((ediff-review-ignore-file-predicates
+         '((lambda (file)
+             (string-match "ba" file)))))
+    (should (not (ediff-review--ignore-file-p "foo")))
+    (should (ediff-review--ignore-file-p "bar"))
+    (should (ediff-review--ignore-file-p "baz"))))
+
 (provide 'ediff-review-test)
 
 ;;; ediff-review-test.el ends here
