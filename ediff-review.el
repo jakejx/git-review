@@ -365,8 +365,7 @@ otherwise create it."
 (defun ediff-review-next-file ()
   "Review next file."
   (interactive)
-  (let* ((current-index (cl-position
-                         (ediff-review--current-file) (ediff-review--files) :test #'equal))
+  (let* ((current-index (seq-position (ediff-review--files) (ediff-review--current-file)))
          (next-index (1+ current-index)))
     (if (>= next-index (length (ediff-review--files)))
         (message "No next file")
@@ -378,8 +377,7 @@ otherwise create it."
 (defun ediff-review-previous-file ()
   "Review previous file."
   (interactive)
-  (let* ((current-index (cl-position
-                         (ediff-review--current-file) (ediff-review--files) :test #'equal))
+  (let* ((current-index (seq-position (ediff-review--files) (ediff-review--current-file)))
          (previous-index (1- current-index)))
     (if (< previous-index 0)
         (message "No previous file")
@@ -795,8 +793,7 @@ Optionally instruct function to SET-FILENAME."
 (defun ediff-review--review-buffer-name ()
   "Return the name of the review buffer."
   (let ((file-index
-         (1+ (cl-position
-              (ediff-review--current-file) (ediff-review--files) :test #'equal)))
+         (1+ (seq-position (ediff-review--files) (ediff-review--current-file))))
         (number-of-files (length (ediff-review--files)))
         (progress (* (ediff-review--progress) 100)))
     (format "*Ediff Review: [%s/%s] %s%%*"
