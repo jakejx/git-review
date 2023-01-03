@@ -124,7 +124,7 @@ Each entry in the list is a property list with the following properties:
           (setq ediff-review--reviews
                 (with-temp-buffer
                   (insert-file-contents db)
-                  (cl-assert (bobp))
+                  (goto-char (point-min))
                   (read (current-buffer))))
         (make-empty-file db t)
         (setq ediff-review--reviews nil)))))
