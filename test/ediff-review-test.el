@@ -50,6 +50,17 @@
     (should (ediff-review--ignore-file-p "bar"))
     (should (ediff-review--ignore-file-p "baz"))))
 
+(ert-deftest ediff-review-test-file-metadata ()
+  (let ((ediff-review-metadata-functions
+         '((lambda (file)
+             (when (string-match "bar" file)
+               `(old . t)))
+           (lambda (file)
+             (when (string-match "foo" file)
+               `(new . t))))))
+    (should (equal (ediff-review--file-metadata "foo") '((new . t))))
+    (should (equal (ediff-review--file-metadata "bar") '((old . t))))))
+
 (provide 'ediff-review-test)
 
 ;;; ediff-review-test.el ends here

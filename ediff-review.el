@@ -93,6 +93,11 @@ Each entry in the list is a property list with the following properties:
   :group 'ediff-review
   :type '(repeat symbol))
 
+(defcustom ediff-review-metadata-functions nil
+  "A list of metadata functions which adds a metadata property to a file."
+  :group 'ediff-review
+  :type '(repeat symbol))
+
 ;;;; Public
 
 (defvar ediff-review nil
@@ -523,6 +528,13 @@ otherwise create it."
   (seq-find (lambda (predicate)
               (funcall predicate file))
             ediff-review-ignore-file-predicates))
+
+(defun ediff-review--file-metadata (file)
+  "Return metadata for file."
+  (thread-last ediff-review-metadata-functions
+               (seq-map (lambda (it)
+                          (funcall it file)))
+               (seq-remove #'null)))
 
 (defun ediff-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."
