@@ -634,6 +634,7 @@ Optionally instruct function to SET-FILENAME."
     (let ((inhibit-read-only t))
       (call-process-shell-command
        (format "git show --pretty=full --stat %s" revision) nil t))
+    (ediff-review---enable-mode)
     (read-only-mode)))
 
 (defun ediff-review--setup-buffers ()
@@ -660,8 +661,8 @@ Optionally instruct function to SET-FILENAME."
                                  (seq-find (lambda (it)
                                              (string-match-p (car it) extension)))
                                  (cdr))))
-    (funcall mode)
-    (ediff-review-minor-mode-mode)))
+    (funcall mode))
+  (ediff-review-minor-mode-mode))
 
 (defun ediff-review--restore-overlays ()
   "Restore altered overlays."
