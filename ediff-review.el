@@ -52,6 +52,11 @@
   :type 'symbol
   :group 'ediff-review)
 
+(defcustom ediff-review-publish-function nil
+  "Function that can publish a review."
+  :type 'symbol
+  :group 'ediff-review)
+
 (defcustom ediff-review-database-dir user-emacs-directory
   "The directory to store the review database in."
   :type 'string
@@ -454,6 +459,16 @@ otherwise create it."
         (ediff-review-branch-review-files (ediff-review--base-revision)
                                           (ediff-review--current-revision))
         (ediff-review-start-review)))))
+
+(defun ediff-review-publish-review ()
+  "Publish review."
+  (interactive)
+  (if (functionp ediff-review-publish-function)
+      (progn
+        ;; TODO: For each comment set published if not already set, and if
+        ;; so add a timestamp
+        (funcall ediff-review-publish-function ediff-review))
+    (message "No publish function definied")))
 
 (defun ediff-review-jump-to-a ()
   "Jump to base revision buffer."
@@ -882,6 +897,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'ediff-review-quit)
     (define-key map (kbd "s") #'ediff-review-select-file)
+    (define-key map (kbd "S") #'ediff-review-publish-review)
     (define-key map (kbd "n") #'ediff-review-next-hunk)
     (define-key map (kbd "p") #'ediff-review-previous-hunk)
     (define-key map (kbd "]") #'ediff-review-next-file)
@@ -918,11 +934,14 @@ Optionally instruct function to SET-FILENAME."
         (goto-char .location.start-point)
         (beginning-of-line)
         (let* ((ov (make-overlay (point) (point)))
-               (time (format-time-string "%Y-%m-%d %a %H:%M:%S" (current-time)))
+               (time (let-alist ediff-review--current-comment
+                       (when .timestamp
+                         (format-time-string "%Y-%m-%d %a %H:%M:%S" .timestamp))))
                (comment-message (let-alist ediff-review--current-comment .message))
                (summary (seq-elt (split-string comment-message "\n") 0))
                (summary-str (truncate-string-to-width summary 30))
-               (comment-header (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") " " time "\n")))
+               (comment-header
+                (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) "\n")))
           (when .header-overlay
             (delete-overlay .header-overlay))
           (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
@@ -968,7 +987,6 @@ in the database.  Plus storing them doesn't make sense."
             (end-point . ,end-position))))
     `((id . ,id)
       (side . ,side)
-      (published . ,nil)
       (location . ,location))))
 
 (defun ediff-review-comment ()
