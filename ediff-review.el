@@ -47,7 +47,7 @@
   :type 'string
   :group 'ediff-review)
 
-(defcustom ediff-review-comment-major-mode nil
+(defcustom ediff-review-comment-major-mode #'text-mode
   "Defines the major mode to use in comment mode."
   :type 'symbol
   :group 'ediff-review)
