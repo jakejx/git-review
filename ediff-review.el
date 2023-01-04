@@ -73,6 +73,7 @@
   '((:name filename :function identity)
     (:name type :function ediff-review--annotation-file-type :face 'font-lock-comment-face)
     (:name reviewed :function ediff-review--annotation-file-reviewed :face 'font-lock-string-face)
+    (:name ignored :function ediff-review--annotation-file-ignored :face 'font-lock-string-face)
     (:name comments :function ediff-review--annotation-file-comments :face 'font-lock-string-face))
   "A list of annotations to display for a review file.
 
@@ -553,10 +554,15 @@ Unless COMMENT is nil, then delete ID."
                      (thread-last .files
                                   (seq-map #'cdr)
                                   (seq-filter (lambda (it)
-                                                (let-alist it .reviewed)))
+                                                (let-alist it
+                                                  (and .reviewed
+                                                       (not .ignore)))))
                                   (length)
                                   (float))
-                     (length .files)))))
+                     (thread-last .files
+                                  (seq-remove (lambda (it)
+                                                (let-alist it .ignore)))
+                                  (length))))))
     (setf (alist-get 'progress ediff-review) progress)))
 
 (defun ediff-review--initialize-review (current-revision &optional base-revision)
@@ -580,7 +586,7 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
   "Add ignore tag to files that should be ignored in variable `ediff-review'."
   (seq-do (lambda (file)
             (when (ediff-review--ignore-file-p file)
-              (ediff-review--update-file file 'ignored t)))
+              (ediff-review--update-file file 'ignore t)))
           (ediff-review--files)))
 
 (defun ediff-review--add-metadata-to-files ()
@@ -923,6 +929,13 @@ Optionally instruct function to SET-FILENAME."
   (let-alist (ediff-review--file-info file)
     (if .reviewed
         "REVIEWED"
+      "")))
+
+(defun ediff-review--annotation-file-ignored (file)
+  "Return FILE's ignore status."
+  (let-alist (ediff-review--file-info file)
+    (if .ignore
+        "IGNORED"
       "")))
 
 (defun ediff-review--annotation-file-comments (file)
