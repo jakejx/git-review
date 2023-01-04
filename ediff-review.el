@@ -263,30 +263,6 @@ otherwise create it."
                               (`(,_type ,old-name ,new-name) `(,old-name ,new-name)))))
                  (flatten-list))))
 
-(defun ediff-review-branch-review-files (branch-a branch-b)
-  "Set list of files based on BRANCH-A and BRANCH-B."
-  (unless (let-alist ediff-review .files)
-    (ediff-review--patchset-files)
-    ;; Filter review files to only be modified in latest commits on
-    ;; branch-a and branch-b
-    (let* ((files-union
-            `("COMMIT_MSG" ,@(thread-last `(,branch-a ,branch-b)
-                                          (seq-map #'ediff-review-branch-modified-files)
-                                          (flatten-list))))
-           (review-files
-            (thread-last (ediff-review--files)
-                         (seq-filter (lambda (it)
-                                       (member it files-union)))
-                         (seq-remove #'ediff-review-file-rebased-p))))
-      ;; Update `ediff-review' with files
-      (let ((updated-files (alist-get 'files ediff-review)))
-        (seq-do (lambda (it)
-                  (let ((file (car it)))
-                    (unless (member file review-files)
-                      (setf updated-files (assoc-delete-all file updated-files #'equal)))))
-                updated-files)
-        (setf (alist-get 'files ediff-review) updated-files)))))
-
 (defun ediff-review-hunk-regions (base-revision current-revision base-file current-file)
   "Hunk regions for BASE-REVISION:BASE-FILE and CURRENT-REVISION:CURRENT-FILE."
   (let* ((diff-command (format "git diff %s:%s %s:%s --unified=0"
@@ -587,45 +563,78 @@ Unless COMMENT is nil, then delete ID."
   "Initialize review of CURRENT-REVISION.
 
 If a BASE-REVISION is provided it indicates multiple patch-sets review."
-  (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
-    (setq ediff-review
-          (seq-find (lambda (it)
-                      (and (equal (let-alist it .current-revision)
-                                  current-revision)
-                           (equal (let-alist it .base-revision)
-                                  base-revision)))
-                    grouped-reviews)))
-  (unless ediff-review
-    (setq ediff-review `((base-revision . ,base-revision)
-                         (current-revision . ,current-revision)
-                         (multiple-patchsets . ,(not (null base-revision)))
-                         (project . ,default-directory)))
-    ;; Update review with files
-    (let* ((files-in-latest-commit
-            (split-string
-             (string-trim
-              (shell-command-to-string
-               (format "git diff --name-status %s..%s"
-                       (ediff-review--base-revision)
-                       (ediff-review--current-revision))))
-             "\n")))
-      (setq files-in-latest-commit `(,(format "%s COMMIT_MSG" (if (let-alist ediff-review .multiple-patchsets) "M" "A")) ,@files-in-latest-commit))
-      (setf (alist-get 'files ediff-review)
-            (seq-map (lambda (it)
-                       (let ((elements (split-string it)))
-                         (pcase elements
-                           (`(,type ,filename)
-                            (cons filename `((current-filename . ,filename)
-                                             (base-filename . ,filename)
-                                             (type . ,type))))
-                           (`(,type ,base-filename ,filename)
-                            (cons filename `((current-filename . ,filename)
-                                             (base-filename . ,base-filename)
-                                             (type . ,type)))))))
-                     files-in-latest-commit)))
+  (if-let ((review (ediff-review--stored-review current-revision base-revision)))
+      (setq ediff-review review)
+    (let ((multiple-patchsets (not (null base-revision)))
+          (revision1 (or base-revision
+                         (concat current-revision "~1")))
+          (revision2 current-revision))
+      (setq ediff-review `((base-revision . ,base-revision)
+                           (current-revision . ,current-revision)
+                           (multiple-patchsets . ,multiple-patchsets)
+                           (project . ,default-directory)))
+      (ediff-review--add-files-to-review))))
+
+(defun ediff-review--add-files-to-review ()
+  "Add files to variable `ediff-review'."
+  (let* ((files-in-latest-commit
+          `(,(format "%s COMMIT_MSG"
+                     (if (ediff-review--multiple-patchsets-p)
+                         "M" "A"))
+            ,@(split-string
+               (string-trim
+                (shell-command-to-string
+                 (format "git diff --name-status %s..%s"
+                         (ediff-review--base-revision)
+                         (ediff-review--current-revision))))
+               "\n"))))
+    (setf (alist-get 'files ediff-review)
+          (seq-map (lambda (it)
+                     (let ((elements (split-string it)))
+                       (pcase elements
+                         (`(,type ,filename)
+                          (cons filename `((current-filename . ,filename)
+                                           (base-filename . ,filename)
+                                           (type . ,type))))
+                         (`(,type ,base-filename ,filename)
+                          (cons filename `((current-filename . ,filename)
+                                           (base-filename . ,base-filename)
+                                           (type . ,type)))))))
+                   files-in-latest-commit))
     (when (ediff-review--multiple-patchsets-p)
-      (ediff-review-branch-review-files (ediff-review--base-revision)
-                                        (ediff-review--current-revision)))))
+        (ediff-review--remove-rebased-files-from-review))))
+
+(defun ediff-review--remove-rebased-files-from-review ()
+  "Remove rebased files in variable `ediff-review'."
+  (let* ((files-union
+          `("COMMIT_MSG"
+            ,@(thread-last `(,(ediff-review--base-revision)
+                             ,(ediff-review--current-revision))
+                           (seq-map #'ediff-review-branch-modified-files)
+                           (flatten-list))))
+         (review-files
+          (thread-last (ediff-review--files)
+                       (seq-filter (lambda (it)
+                                     (member it files-union)))
+                       (seq-remove #'ediff-review-file-rebased-p))))
+    ;; Update `ediff-review' with files
+    (let ((updated-files (alist-get 'files ediff-review)))
+      (seq-do (lambda (it)
+                (let ((file (car it)))
+                  (unless (member file review-files)
+                    (setf updated-files (assoc-delete-all file updated-files #'equal)))))
+              updated-files)
+      (setf (alist-get 'files ediff-review) updated-files))))
+
+(defun ediff-review--stored-review (current-revision base-revision)
+  "Return a stored review of CURRENT-REVISION and BASE-REVISION."
+  (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
+    (seq-find (lambda (it)
+                (and (equal (let-alist it .current-revision)
+                            current-revision)
+                     (equal (let-alist it .base-revision)
+                            base-revision)))
+              grouped-reviews)))
 
 (defun ediff-review--restore-buffer-location ()
   "Restore buffer location to nearest diff in revision buffer.
