@@ -336,26 +336,24 @@ otherwise create it."
 (defun ediff-review-next-file ()
   "Review next file."
   (interactive)
-  (let* ((current-index (seq-position (ediff-review--files) (ediff-review--current-file)))
-         (next-index (1+ current-index)))
-    (if (>= next-index (length (ediff-review--files)))
-        (message "No next file")
-      (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-      (ediff-review-close-review-file)
-      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) next-index))
-      (ediff-review-file))))
+  (if-let ((next-file (ediff-review--next-file)))
+      (progn
+        (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
+        (ediff-review-close-review-file)
+        (ediff-review-setup-project-file-review next-file)
+        (ediff-review-file))
+    (message "No next file")))
 
 (defun ediff-review-previous-file ()
   "Review previous file."
   (interactive)
-  (let* ((current-index (seq-position (ediff-review--files) (ediff-review--current-file)))
-         (previous-index (1- current-index)))
-    (if (< previous-index 0)
-        (message "No previous file")
-      (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-      (ediff-review-close-review-file)
-      (ediff-review-setup-project-file-review (seq-elt (ediff-review--files) previous-index))
-      (ediff-review-file))))
+  (if-let ((previous-file (ediff-review--previous-file)))
+      (progn
+        (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
+        (ediff-review-close-review-file)
+        (ediff-review-setup-project-file-review previous-file)
+        (ediff-review-file))
+    (message "No previous file")))
 
 (defun ediff-review-select-file ()
   "Select a file to review."
@@ -866,6 +864,31 @@ Optionally instruct function to SET-FILENAME."
             file-index
             number-of-files
             progress)))
+
+(defun ediff-review--next-file ()
+  "Return next file."
+  (thread-last (let-alist ediff-review .files)
+               (seq-drop-while (lambda (it)
+                                 (not (string= (car it)
+                                               (ediff-review--current-file)))))
+               (cdr)
+               (seq-find (lambda (it)
+                           (let-alist (cdr it)
+                             (not .ignore))))
+               (car)))
+
+(defun ediff-review--previous-file ()
+  "Return previous file."
+  (thread-last (let-alist ediff-review .files)
+               (seq-take-while (lambda (it)
+                                 (not (string= (car it)
+                                               (ediff-review--current-file)))))
+               (butlast)
+               (nreverse)
+               (seq-find (lambda (it)
+                           (let-alist (cdr it)
+                             (not .ignore))))
+               (car)))
 
 (defun ediff-review--annotations (candidates annotation-config)
   "Return annotations of CANDIDATES according to ANNOTATION-CONFIG."
