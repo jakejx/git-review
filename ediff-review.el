@@ -36,7 +36,7 @@
 (require 'files)
 (require 'project)
 (require 'tab-bar)
-(require 'subr)
+(require 'subr-x)
 
 
 
@@ -131,6 +131,10 @@ Each entry in the list is a property list with the following properties:
 (defface ediff-review-fine-rebase-diff
   '((t :inherit ediff-fine-diff-C))
   "Face used to highlight rebase diff.")
+
+(defface ediff-review-comment-header
+  '((t :inherit diff-function))
+  "Face used to highlight comment header.")
 
 ;;;; Functions
 
@@ -1024,7 +1028,7 @@ Optionally instruct function to SET-FILENAME."
             (delete-overlay .header-overlay))
           (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
           (overlay-put ov 'ediff-review-comment .id)
-          (overlay-put ov 'before-string (propertize comment-header 'face 'diff-function)))))))
+          (overlay-put ov 'before-string (propertize comment-header 'face 'ediff-review-comment-header)))))))
 
 (defun ediff-review--add-comment-overlay ()
   "Add a comment overlay."
