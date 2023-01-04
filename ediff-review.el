@@ -33,8 +33,10 @@
 ;;;; Requirements
 
 (require 'ediff)
+(require 'files)
 (require 'project)
 (require 'tab-bar)
+(require 'subr)
 
 
 
