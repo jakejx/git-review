@@ -243,11 +243,6 @@ otherwise create it."
                 (kill-buffer it)))
             (buffer-list))))
 
-(defun ediff-review--patchset-files ()
-  "Determine which files to review."
-  (unless (let-alist ediff-review .files)
-    ))
-
 (defun ediff-review-branch-modified-files (branch)
   "Return a list of modified files in BRANCH."
   (let ((lines (split-string
