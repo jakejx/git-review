@@ -447,6 +447,63 @@ otherwise create it."
   (interactive)
   (select-window (ediff-review--control-window)))
 
+(defun ediff-review-comment ()
+  "Add or edit a comment."
+  (interactive)
+  (setq ediff-review--current-comment
+        (or
+         (let-alist (ediff-review--file-info)
+           (thread-last .comments
+                        (seq-find (lambda (it)
+                                    (let-alist it
+                                      (<= .location.start-point (point) .location.end-point))))
+                        (cdr)))
+         (ediff-review--create-comment)))
+  (let* ((buffer (get-buffer-create "*ediff-review-comment*")))
+    (display-buffer buffer ediff-review-comment-buffer-action)
+    (with-current-buffer buffer
+      (erase-buffer)
+      (let-alist ediff-review--current-comment
+        (when .message (insert .message)))
+
+      (when ediff-review-comment-major-mode
+        (funcall ediff-review-comment-major-mode))
+      (ediff-review-comment-mode)
+      (select-window (get-buffer-window (current-buffer)))
+      (goto-char (point-max)))))
+
+(defun ediff-review-kill-comment ()
+  "Kill comment at point."
+  (interactive)
+  (when-let ((comment
+              (let-alist (ediff-review--file-info)
+                (thread-last .comments
+                             (seq-find (lambda (it)
+                                         (let-alist it
+                                           (<= .location.start-point (point) .location.end-point))))
+                             (cdr)))))
+    (let-alist comment
+      (delete-overlay .header-overlay)
+      (delete-overlay .comment-overlay)
+      (ediff-review--update-comments .id))))
+
+(defun ediff-review-complete-comment ()
+  "Complete the review comment."
+  (interactive)
+  (setf (alist-get 'message ediff-review--current-comment)
+        (buffer-substring-no-properties (point-min) (point-max)))
+  (ediff-review--add-comment-overlay)
+  (ediff-review--update-comments (let-alist ediff-review--current-comment .id)
+                                 ediff-review--current-comment)
+  (setq ediff-review--current-comment nil)
+  (quit-restore-window))
+
+(defun ediff-review-quit-comment ()
+  "Quit review comment."
+  (interactive)
+  (setq ediff-review--current-comment nil)
+  (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
+
 ;;;; Support functions
 
 (defun ediff-review--project-root ()
@@ -866,6 +923,83 @@ Optionally instruct function to SET-FILENAME."
             number-of-files
             progress)))
 
+(defun ediff-review--create-comment ()
+  "Create a new comment and return it."
+  (let* ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
+         (side (if (eq (current-buffer) ediff-review-base-revision-buffer) 'a 'b))
+         (start-position (min (mark) (point)))
+         (end-position (max (mark) (point)))
+         (location
+          `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
+            (start-column . ,(save-excursion (goto-char start-position) (current-column)))
+            (start-point . ,start-position)
+            (end-line . ,(save-excursion (goto-char end-position) (current-line)))
+            (end-column . ,(save-excursion (goto-char end-position) (current-column)))
+            (end-point . ,end-position))))
+    `((id . ,id)
+      (side . ,side)
+      (location . ,location))))
+
+(defun ediff-review--remove-file-comment-overlays ()
+  "Remove all overlays in the comments.
+
+This is required since we can't serialize the overlays and store them
+in the database.  Plus storing them doesn't make sense."
+  (let* ((comments (let-alist (ediff-review--file-info) .comments)))
+    (seq-do (lambda (it)
+              (pcase-let ((`(,id . ,comment) it))
+                (setf comment (assoc-delete-all 'header-overlay comment))
+                (setf comment (assoc-delete-all 'comment-overlay comment))
+                (ediff-review--update-comments id comment)))
+            comments)))
+
+(defun ediff-review--add-comment-overlay ()
+  "Add a comment overlay."
+  (let-alist ediff-review--current-comment
+    (with-current-buffer (if (eq .side 'a) ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
+      (unless .comment-overlay
+        (let* ((ov (or .comment-overlay (make-overlay .location.start-point .location.end-point))))
+          (setf (alist-get 'comment-overlay ediff-review--current-comment) ov)
+          (overlay-put ov 'ediff-review-comment .id)
+          (overlay-put ov 'face 'ansi-color-fast-blink)))
+      (ediff-review--add-comment-header-overlay))))
+
+(defun ediff-review--add-comment-header-overlay ()
+  "Add a comment header overlay."
+  (let-alist ediff-review--current-comment
+    (with-current-buffer (if (eq .side 'a) ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
+      (save-excursion
+        (goto-char .location.start-point)
+        (beginning-of-line)
+        (let* ((ov (make-overlay (point) (point)))
+               (time (let-alist ediff-review--current-comment
+                       (when .timestamp
+                         (format-time-string "%Y-%m-%d %a %H:%M:%S" .timestamp))))
+               (comment-message (let-alist ediff-review--current-comment .message))
+               (summary (seq-elt (split-string comment-message "\n") 0))
+               (summary-str (truncate-string-to-width summary 30))
+               (comment-header
+                (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) "\n")))
+          (when .header-overlay
+            (delete-overlay .header-overlay))
+          (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
+          (overlay-put ov 'ediff-review-comment .id)
+          (overlay-put ov 'before-string (propertize comment-header 'face 'ediff-review-comment-header)))))))
+
+(defun ediff-review--restore-comment-overlays ()
+  "Restore comment overlays in the current file."
+  (when (ediff-review--has-comments-p (ediff-review--current-file))
+      (seq-do (lambda (it)
+                (let ((comment (cdr it)))
+                  (setq ediff-review--current-comment comment)
+                  (let-alist ediff-review--current-comment
+                    (setf (alist-get 'header-overlay ediff-review--current-comment) nil)
+                    (setf (alist-get 'comment-overlay ediff-review--current-comment) nil)
+                    (ediff-review--add-comment-overlay)
+                    (ediff-review--update-comments .id ediff-review--current-comment))
+                  (setq ediff-review--current-comment nil)))
+              (let-alist (ediff-review--file-info) .comments))))
+
 (defun ediff-review--next-file ()
   "Return next file."
   (thread-last (let-alist ediff-review .files)
@@ -992,141 +1126,7 @@ Optionally instruct function to SET-FILENAME."
   (rename-buffer
    (ediff-review--review-buffer-name)))
 
-;;;; WIP Comments
-
-(defun ediff-review--restore-comment-overlays ()
-  "Restore comment overlays in the current file."
-  (when (ediff-review--has-comments-p (ediff-review--current-file))
-      (seq-do (lambda (it)
-                (let ((comment (cdr it)))
-                  (setq ediff-review--current-comment comment)
-                  (let-alist ediff-review--current-comment
-                    (setf (alist-get 'header-overlay ediff-review--current-comment) nil)
-                    (setf (alist-get 'comment-overlay ediff-review--current-comment) nil)
-                    (ediff-review--add-comment-overlay)
-                    (ediff-review--update-comments .id ediff-review--current-comment))
-                  (setq ediff-review--current-comment nil)))
-              (let-alist (ediff-review--file-info) .comments))))
-
-(defun ediff-review--add-comment-header-overlay ()
-  "Add a comment header overlay."
-  (let-alist ediff-review--current-comment
-    (with-current-buffer (if (eq .side 'a) ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
-      (save-excursion
-        (goto-char .location.start-point)
-        (beginning-of-line)
-        (let* ((ov (make-overlay (point) (point)))
-               (time (let-alist ediff-review--current-comment
-                       (when .timestamp
-                         (format-time-string "%Y-%m-%d %a %H:%M:%S" .timestamp))))
-               (comment-message (let-alist ediff-review--current-comment .message))
-               (summary (seq-elt (split-string comment-message "\n") 0))
-               (summary-str (truncate-string-to-width summary 30))
-               (comment-header
-                (concat ediff-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) "\n")))
-          (when .header-overlay
-            (delete-overlay .header-overlay))
-          (setf (alist-get 'header-overlay ediff-review--current-comment) ov)
-          (overlay-put ov 'ediff-review-comment .id)
-          (overlay-put ov 'before-string (propertize comment-header 'face 'ediff-review-comment-header)))))))
-
-(defun ediff-review--add-comment-overlay ()
-  "Add a comment overlay."
-  (let-alist ediff-review--current-comment
-    (with-current-buffer (if (eq .side 'a) ediff-review-base-revision-buffer ediff-review-current-revision-buffer)
-      (unless .comment-overlay
-        (let* ((ov (or .comment-overlay (make-overlay .location.start-point .location.end-point))))
-          (setf (alist-get 'comment-overlay ediff-review--current-comment) ov)
-          (overlay-put ov 'ediff-review-comment .id)
-          (overlay-put ov 'face 'ansi-color-fast-blink)))
-      (ediff-review--add-comment-header-overlay))))
-
-(defun ediff-review--remove-file-comment-overlays ()
-  "Remove all overlays in the comments.
-
-This is required since we can't serialize the overlays and store them
-in the database.  Plus storing them doesn't make sense."
-  (let* ((comments (let-alist (ediff-review--file-info) .comments)))
-    (seq-do (lambda (it)
-              (pcase-let ((`(,id . ,comment) it))
-                (setf comment (assoc-delete-all 'header-overlay comment))
-                (setf comment (assoc-delete-all 'comment-overlay comment))
-                (ediff-review--update-comments id comment)))
-            comments)))
-
-(defun ediff-review--create-comment ()
-  "Create a new comment and return it."
-  (let* ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
-         (side (if (eq (current-buffer) ediff-review-base-revision-buffer) 'a 'b))
-         (start-position (min (mark) (point)))
-         (end-position (max (mark) (point)))
-         (location
-          `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
-            (start-column . ,(save-excursion (goto-char start-position) (current-column)))
-            (start-point . ,start-position)
-            (end-line . ,(save-excursion (goto-char end-position) (current-line)))
-            (end-column . ,(save-excursion (goto-char end-position) (current-column)))
-            (end-point . ,end-position))))
-    `((id . ,id)
-      (side . ,side)
-      (location . ,location))))
-
-(defun ediff-review-comment ()
-  "Add or edit a comment."
-  (interactive)
-  (setq ediff-review--current-comment
-        (or
-         (let-alist (ediff-review--file-info)
-           (thread-last .comments
-                        (seq-find (lambda (it)
-                                    (let-alist it
-                                      (<= .location.start-point (point) .location.end-point))))
-                        (cdr)))
-         (ediff-review--create-comment)))
-  (let* ((buffer (get-buffer-create "*ediff-review-comment*")))
-    (display-buffer buffer ediff-review-comment-buffer-action)
-    (with-current-buffer buffer
-      (erase-buffer)
-      (let-alist ediff-review--current-comment
-        (when .message (insert .message)))
-
-      (when ediff-review-comment-major-mode
-        (funcall ediff-review-comment-major-mode))
-      (ediff-review-comment-mode)
-      (select-window (get-buffer-window (current-buffer)))
-      (goto-char (point-max)))))
-
-(defun ediff-review-kill-comment ()
-  "Kill comment at point."
-  (interactive)
-  (when-let ((comment
-              (let-alist (ediff-review--file-info)
-                (thread-last .comments
-                             (seq-find (lambda (it)
-                                         (let-alist it
-                                           (<= .location.start-point (point) .location.end-point))))
-                             (cdr)))))
-    (let-alist comment
-      (delete-overlay .header-overlay)
-      (delete-overlay .comment-overlay)
-      (ediff-review--update-comments .id))))
-
-(defun ediff-review-complete-comment ()
-  "Complete the review comment."
-  (interactive)
-  (setf (alist-get 'message ediff-review--current-comment)
-        (buffer-substring-no-properties (point-min) (point-max)))
-  (ediff-review--add-comment-overlay)
-  (ediff-review--update-comments (let-alist ediff-review--current-comment .id)
-                                 ediff-review--current-comment)
-  (setq ediff-review--current-comment nil)
-  (quit-restore-window))
-
-(defun ediff-review-quit-comment ()
-  "Quit review comment."
-  (interactive)
-  (setq ediff-review--current-comment nil)
-  (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
+;;;; Minor modes
 
 (define-minor-mode ediff-review-comment-mode
   "Mode for `ediff-review' comment."
