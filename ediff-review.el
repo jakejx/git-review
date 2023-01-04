@@ -480,7 +480,7 @@ otherwise create it."
             ediff-review-ignore-file-predicates))
 
 (defun ediff-review--file-metadata (file)
-  "Return metadata for file."
+  "Return metadata for FILE."
   (thread-last ediff-review-metadata-functions
                (seq-map (lambda (it)
                           (funcall it file)))
@@ -572,7 +572,23 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
                            (project . ,default-directory)))
       (ediff-review--add-files-to-review)
       (when multiple-patchsets
-        (ediff-review--remove-rebased-files-from-review)))))
+        (ediff-review--remove-rebased-files-from-review))
+      (ediff-review--add-metadata-to-files)
+      (ediff-review--add-ignore-tag-to-files))))
+
+(defun ediff-review--add-ignore-tag-to-files ()
+  "Add ignore tag to files that should be ignored in variable `ediff-review'."
+  (seq-do (lambda (file)
+            (when (ediff-review--ignore-file-p file)
+              (ediff-review--update-file file 'ignored t)))
+          (ediff-review--files)))
+
+(defun ediff-review--add-metadata-to-files ()
+  "Add metadata to files in variable `ediff-review'."
+  (seq-do (lambda (file)
+            (when-let ((metadata (ediff-review--file-metadata file)))
+              (ediff-review--update-file file 'metadata metadata)))
+          (ediff-review--files)))
 
 (defun ediff-review--add-files-to-review ()
   "Add files to variable `ediff-review'."
