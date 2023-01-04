@@ -565,15 +565,14 @@ Unless COMMENT is nil, then delete ID."
 If a BASE-REVISION is provided it indicates multiple patch-sets review."
   (if-let ((review (ediff-review--stored-review current-revision base-revision)))
       (setq ediff-review review)
-    (let ((multiple-patchsets (not (null base-revision)))
-          (revision1 (or base-revision
-                         (concat current-revision "~1")))
-          (revision2 current-revision))
+    (let ((multiple-patchsets (not (null base-revision))))
       (setq ediff-review `((base-revision . ,base-revision)
                            (current-revision . ,current-revision)
                            (multiple-patchsets . ,multiple-patchsets)
                            (project . ,default-directory)))
-      (ediff-review--add-files-to-review))))
+      (ediff-review--add-files-to-review)
+      (when multiple-patchsets
+        (ediff-review--remove-rebased-files-from-review)))))
 
 (defun ediff-review--add-files-to-review ()
   "Add files to variable `ediff-review'."
@@ -600,9 +599,7 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
                           (cons filename `((current-filename . ,filename)
                                            (base-filename . ,base-filename)
                                            (type . ,type)))))))
-                   files-in-latest-commit))
-    (when (ediff-review--multiple-patchsets-p)
-        (ediff-review--remove-rebased-files-from-review))))
+                   files-in-latest-commit))))
 
 (defun ediff-review--remove-rebased-files-from-review ()
   "Remove rebased files in variable `ediff-review'."
