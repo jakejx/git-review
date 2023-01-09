@@ -1018,7 +1018,6 @@ in the database.  Plus storing them doesn't make sense."
                (seq-take-while (lambda (it)
                                  (not (string= (car it)
                                                (ediff-review--current-file)))))
-               (butlast)
                (nreverse)
                (seq-find (lambda (it)
                            (let-alist (cdr it)
