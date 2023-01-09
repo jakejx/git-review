@@ -1148,6 +1148,9 @@ in the database.  Plus storing them doesn't make sense."
 
 ;;;; Sage WIP
 
+;; Format:
+;; git show --pretty=format:"Parent: %P%nAuthor: %aN%nAuthorDate: %ad" --stat .
+
 (defun sage--query-change (change-number project)
   "Query CHANGE-NUMBER in PROJECT."
   (let ((sage-gerrit-url "gerrit.cicd.autoheim.net")
@@ -1189,17 +1192,16 @@ in the database.  Plus storing them doesn't make sense."
              patchset))))
 
 ;; Publish review comments
-;; (sage-publish-review-comments ediff-review "330767" "4")
+;; (sage-publish-review-comments ediff-review "b64802a410c38d094a95ea4a96d6ec0cfad4c543")
 
-(defun sage-publish-review-comments (review change patchset)
-  "Publish all unpublished comments in REVIEW on CHANGE's PATCHSET."
-  ;; TODO(Niklas Eklund, 20221230): Need to add check for multi
-  ;; patchset comments. It doesn't seem like base-revision can be
-  ;; properly refered to. Can probably do a hack that if a comment is
-  ;; about to get added it will open the location in the browser
-  ;; instead?
+(defun sage-publish-review-comments (review commit)
+  "Publish all unpublished comments in REVIEW on COMMIT."
+  ;; TODO(Niklas Eklund, 20230109): Add gerrit query for finding out
+  ;; project of a commit, this should be done by parsing the change-id
+  ;; from the commit message
   (let-alist review
-    (let ((comments (thread-last .files
+    (let ((project "src")
+          (comments (thread-last .files
                                  (seq-filter (lambda (file)
                                                (let-alist file .comments)))
                                  (seq-map (lambda (file)
@@ -1220,10 +1222,10 @@ in the database.  Plus storing them doesn't make sense."
                                                                              (unresolved . ,t)
                                                                              (message . ,(let-alist comment .message))))))
                                                               (vconcat)))))))))
-      (sage--send-json-review `((comments . ,comments)) change patchset))))
+      (sage--send-json-review `((comments . ,comments)) commit project))))
 
-(defun sage--send-json-review (comments change patchset)
-  "Send COMMENTS on CHANGE's PATCHSET as json data."
+(defun sage--send-json-review (comments commit project)
+  "Send COMMENTS on PROJECT's COMMIT as json data."
   (setq test-json-message (json-encode comments))
   (let ((temp-file (make-temp-file "sage"))
         (buffer (get-buffer-create "*sage-gerrit*")))
@@ -1232,7 +1234,7 @@ in the database.  Plus storing them doesn't make sense."
     (with-temp-file temp-file
       (insert test-json-message))
     (call-process-shell-command
-     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json %s,%s" temp-file change patchset)
+     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json --project %s %s" temp-file project commit)
      nil buffer)
     (message "Temp file: %s" temp-file)))
 
