@@ -1192,16 +1192,12 @@ in the database.  Plus storing them doesn't make sense."
              patchset))))
 
 ;; Publish review comments
-;; (sage-publish-review-comments ediff-review "b64802a410c38d094a95ea4a96d6ec0cfad4c543")
+;; (sage--publish-review-comments ediff-review "b64802a410c38d094a95ea4a96d6ec0cfad4c543")
 
-(defun sage-publish-review-comments (review commit)
+(defun sage--publish-review-comments (review commit project)
   "Publish all unpublished comments in REVIEW on COMMIT."
-  ;; TODO(Niklas Eklund, 20230109): Add gerrit query for finding out
-  ;; project of a commit, this should be done by parsing the change-id
-  ;; from the commit message
   (let-alist review
-    (let ((project "src")
-          (comments (thread-last .files
+    (let ((comments (thread-last .files
                                  (seq-filter (lambda (file)
                                                (let-alist file .comments)))
                                  (seq-map (lambda (file)
@@ -1237,6 +1233,43 @@ in the database.  Plus storing them doesn't make sense."
      (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json --project %s %s" temp-file project commit)
      nil buffer)
     (message "Temp file: %s" temp-file)))
+
+(defun sage--commit-change-id (&optional commit)
+  "Return COMMIT's change-id."
+  (let ((commit (or commit
+                    (string-trim (shell-command-to-string "git rev-parse HEAD"))))
+        (re (rx  "Change-Id: " (group (regexp ".*")))))
+    (with-temp-buffer
+      (call-process-shell-command (format "git show --pretty=full --name-status %s" commit) nil t)
+      (goto-char (point-min))
+      (when (search-forward-regexp re nil t)
+        (match-string 1)))))
+
+(defun sage--change (change-id)
+  "Return change with CHANGE-ID."
+  (let* ((sage-gerrit-port "29418")
+         (sage-gerrit-url "gerrit.cicd.autoheim.net")
+         (query
+          (format "--format=JSON --current-patch-set %s" change-id)))
+    (with-temp-buffer
+      (call-process-shell-command (format "ssh -p %s %s gerrit query %s"
+                                          sage-gerrit-port
+                                          sage-gerrit-url
+                                          query)
+                                  nil t)
+      (goto-char (point-min))
+      (json-parse-buffer :array-type 'array
+                         :object-type 'alist
+                         :null-object nil
+                         :false-object nil))))
+
+(defun sage-publish-review-comments ()
+  "Publish comments stored in `ediff-review'."
+  (when-let* ((commit (string-trim (shell-command-to-string "git rev-parse HEAD")))
+              (change (sage--change
+                       (sage--commit-change-id commit))))
+    (let-alist change
+      (sage--publish-review-comments ediff-review commit .project))))
 
 (provide 'ediff-review)
 
