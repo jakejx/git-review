@@ -776,10 +776,10 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review---enable-mode ()
   "Enable filename appropriate mode."
-  (when-let* ((extension (file-name-extension (ediff-review--current-file) t))
-              (mode (thread-last auto-mode-alist
+  (when-let* ((mode (thread-last auto-mode-alist
                                  (seq-find (lambda (it)
-                                             (string-match-p (car it) extension)))
+                                             (string-match-p (car it)
+                                                             (ediff-review--current-file))))
                                  (cdr))))
     (funcall mode))
   (ediff-review-minor-mode-mode))
