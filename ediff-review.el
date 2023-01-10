@@ -914,10 +914,14 @@ Optionally instruct function to SET-FILENAME."
 
 (defun ediff-review--review-buffer-name ()
   "Return the name of the review buffer."
-  (let ((file-index
-         (1+ (seq-position (ediff-review--files) (ediff-review--current-file))))
-        (number-of-files (length (ediff-review--files)))
-        (progress (* (ediff-review--progress) 100)))
+  (let* ((review-files (thread-last (ediff-review--files)
+                                    (seq-remove #'ediff-review--ignore-file-p)))
+         (file-index
+          (if (ediff-review--ignore-file-p (ediff-review--current-file))
+              "_"
+            (seq-position review-files (ediff-review--current-file))))
+         (number-of-files (1- (seq-length review-files)))
+         (progress (* (ediff-review--progress) 100)))
     (format "*Ediff Review: [%s/%s] %s%%*"
             file-index
             number-of-files
