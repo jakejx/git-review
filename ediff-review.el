@@ -4,7 +4,7 @@
 
 ;; Author: Niklas Eklund <niklas.eklund@posteo.net>
 ;; Maintainer: Niklas Eklund <niklas.eklund@posteo.net>
-;; URL: https://sr.ht/~niklaseklund/ediff-review.el
+;; URL: https://sr.ht/~niklaseklund/ediff-review
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "27.1") (project "0.9.3"))
 ;; Keywords: convenience tools
@@ -1145,131 +1145,6 @@ in the database.  Plus storing them doesn't make sense."
             (define-key map (kbd "C-c C-'") #'ediff-review-comment)
             (define-key map (kbd "C-c C-k") #'ediff-review-kill-comment)
             map))
-
-;;;; Sage WIP
-
-;; Format:
-;; git show --pretty=format:"Parent: %P%nAuthor: %aN%nAuthorDate: %ad" --stat .
-
-(defun sage--query-change (change-number project)
-  "Query CHANGE-NUMBER in PROJECT."
-  (let ((sage-gerrit-url "gerrit.cicd.autoheim.net")
-        (sage-gerrit-port "29418"))
-    (with-temp-buffer
-      (call-process-shell-command
-       (format "ssh -p %s %s gerrit query --format=JSON --current-patch-set \"project:%s change:%s\""
-               sage-gerrit-port sage-gerrit-url
-               project change-number)
-       nil t)
-      (goto-char (point-min))
-      (json-parse-buffer :array-type 'array
-                         :object-type 'alist
-                         :null-object nil
-                         :false-object nil))))
-
-(defun sage--download-ref ()
-  "Download change and put in branch."
-  (let* ((default-directory "~/src/src")
-         (project "src")
-         (change-number 330750)
-         (patchset 10)
-         (change (sage--query-change change-number project))
-         (ref (let-alist change .currentPatchSet.ref))
-         (general-ref
-          (string-join (butlast (split-string ref "/")) "/"))
-         (sage-gerrit-url "gerrit.cicd.autoheim.net")
-         (sage-gerrit-port "29418")
-         (sage-gerrit-user "s0000034"))
-    (call-process-shell-command
-     (format "git fetch ssh://%s@%s:%s/%s %s/%s && git branch review/change-%s,%s"
-             sage-gerrit-user
-             sage-gerrit-url
-             sage-gerrit-port
-             project
-             general-ref
-             patchset
-             change-number
-             patchset))))
-
-;; Publish review comments
-;; (sage--publish-review-comments ediff-review "b64802a410c38d094a95ea4a96d6ec0cfad4c543")
-
-(defun sage--publish-review-comments (review commit project)
-  "Publish all unpublished comments in REVIEW on COMMIT."
-  (let-alist review
-    (let ((comments (thread-last .files
-                                 (seq-filter (lambda (file)
-                                               (let-alist file .comments)))
-                                 (seq-map (lambda (file)
-                                            (let-alist file
-                                              `(,(if (string= "COMMIT_MSG" .current-filename) "/COMMIT_MSG" .current-filename)
-                                                .
-                                                ,(thread-last .comments
-                                                              (seq-map (lambda (it)
-                                                                         (let* ((comment (cdr it))
-                                                                                (range
-                                                                                 (let-alist comment
-                                                                                   `((start_line . ,(1+ .location.start-line))
-                                                                                     (start_character . ,.location.start-column)
-                                                                                     (end_line . ,(1+ .location.end-line))
-                                                                                     (end_character . ,.location.end-column)))))
-                                                                           `((side . ,(if (eq (let-alist comment .side) 'a) "PARENT" "REVISION"))
-                                                                             (range . ,range)
-                                                                             (unresolved . ,t)
-                                                                             (message . ,(let-alist comment .message))))))
-                                                              (vconcat)))))))))
-      (sage--send-json-review `((comments . ,comments)) commit project))))
-
-(defun sage--send-json-review (comments commit project)
-  "Send COMMENTS on PROJECT's COMMIT as json data."
-  (setq test-json-message (json-encode comments))
-  (let ((temp-file (make-temp-file "sage"))
-        (buffer (get-buffer-create "*sage-gerrit*")))
-    (with-current-buffer buffer
-      (erase-buffer))
-    (with-temp-file temp-file
-      (insert test-json-message))
-    (call-process-shell-command
-     (format "cat %s | ssh -p 29418 gerrit.cicd.autoheim.net gerrit review --json --project %s %s" temp-file project commit)
-     nil buffer)
-    (message "Temp file: %s" temp-file)))
-
-(defun sage--commit-change-id (&optional commit)
-  "Return COMMIT's change-id."
-  (let ((commit (or commit
-                    (string-trim (shell-command-to-string "git rev-parse HEAD"))))
-        (re (rx  "Change-Id: " (group (regexp ".*")))))
-    (with-temp-buffer
-      (call-process-shell-command (format "git show --pretty=full --name-status %s" commit) nil t)
-      (goto-char (point-min))
-      (when (search-forward-regexp re nil t)
-        (match-string 1)))))
-
-(defun sage--change (change-id)
-  "Return change with CHANGE-ID."
-  (let* ((sage-gerrit-port "29418")
-         (sage-gerrit-url "gerrit.cicd.autoheim.net")
-         (query
-          (format "--format=JSON --current-patch-set %s" change-id)))
-    (with-temp-buffer
-      (call-process-shell-command (format "ssh -p %s %s gerrit query %s"
-                                          sage-gerrit-port
-                                          sage-gerrit-url
-                                          query)
-                                  nil t)
-      (goto-char (point-min))
-      (json-parse-buffer :array-type 'array
-                         :object-type 'alist
-                         :null-object nil
-                         :false-object nil))))
-
-(defun sage-publish-review-comments ()
-  "Publish comments stored in `ediff-review'."
-  (when-let* ((commit (string-trim (shell-command-to-string "git rev-parse HEAD")))
-              (change (sage--change
-                       (sage--commit-change-id commit))))
-    (let-alist change
-      (sage--publish-review-comments ediff-review commit .project))))
 
 (provide 'ediff-review)
 
