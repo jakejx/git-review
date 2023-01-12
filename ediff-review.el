@@ -691,6 +691,9 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
           (thread-last (ediff-review--files)
                        (seq-filter (lambda (it)
                                      (member it files-union)))
+                       ;; TODO(Niklas Eklund, 20230111): Look into the
+                       ;; logic of this, it doesn't seems to always
+                       ;; work
                        (seq-remove #'ediff-review-file-rebased-p))))
     ;; Update `ediff-review' with files
     (let ((updated-files (alist-get 'files ediff-review)))
