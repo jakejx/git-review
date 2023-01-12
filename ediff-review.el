@@ -724,7 +724,8 @@ there is a previous location to return to."
         (goto-char .buffer-location.b))
       (with-selected-window (ediff-review--control-window)
         (let ((last-command-event ?b))
-          (ediff-jump-to-difference-at-point nil))))))
+          (ediff-jump-to-difference-at-point nil))
+        (ediff-review---maybe-modify-overlays)))))
 
 (defun ediff-review--control-window ()
   "Return window for variable `ediff-control-buffer'."
