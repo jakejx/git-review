@@ -71,8 +71,12 @@
   :group 'ediff-review
   :type 'sexp)
 
+(defun ediff-review--annotation-file-name (entry)
+  "Return file-name of ENTRY."
+  (car entry))
+
 (defcustom ediff-review-file-annotation
-  '((:name filename :function identity)
+  '((:name filename :function ediff-review--annotation-file-name)
     (:name type :function ediff-review--annotation-file-type :face 'font-lock-comment-face)
     (:name reviewed :function ediff-review--annotation-file-reviewed :face 'font-lock-string-face)
     (:name ignored :function ediff-review--annotation-file-ignored :face 'font-lock-string-face)
@@ -359,12 +363,16 @@ otherwise create it."
 (defun ediff-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let ((candidates (ediff-review--candidate-annotations
-                           (ediff-review--files)
-                           ediff-review-file-annotation))
-             (file (ediff-review-completing-read candidates
-                                                 "Select file: "
-                                                 'ediff-review-file)))
+  (when-let ((candidates (seq-map (lambda (file)
+                                    `(,file . ,(ediff-review--file-info file)))
+                                  (ediff-review--files)))
+             (candidates (ediff-review--candidate-annotations
+                          candidates
+                          ediff-review-file-annotation))
+             (file-info (ediff-review-completing-read candidates
+                                                      "Select file: "
+                                                      'ediff-review-file))
+             (file (let-alist file-info .current-filename)))
     (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
     (ediff-review-close-review-file)
     (ediff-review-setup-project-file-review file)
@@ -1042,17 +1050,18 @@ in the database.  Plus storing them doesn't make sense."
   "Return annotations of CANDIDATES according to ANNOTATION-CONFIG."
   (thread-last candidates
                (seq-map (lambda (candidate)
-                          (thread-last annotation-config
-                                       (seq-map (lambda (config)
-                                                  `(,(plist-get config :name) .
-                                                    ,(funcall (plist-get config :function) candidate)))))))
-               (vconcat)))
+                          (cons (car candidate)
+                                (thread-last annotation-config
+                                             (seq-map (lambda (config)
+                                                        `(,(plist-get config :name) .
+                                                          ,(funcall (plist-get config :function) candidate))))))))))
 
 (defun ediff-review--annotation-widths (annotations annotation-config)
   "Return widths of ANNOTATIONS according to ANNOTATION-CONFIG."
   (seq-map (lambda (config)
              `(,(plist-get config :name) .
                ,(thread-last annotations
+                             (seq-map #'cdr)
                              (seq-map (lambda (it) (length (alist-get (plist-get config :name) it))))
                              (funcall (lambda (it)
                                         (if-let ((max-width (plist-get config :width)))
@@ -1066,52 +1075,53 @@ in the database.  Plus storing them doesn't make sense."
                                                  annotation-config))
          (annotation-widths (ediff-review--annotation-widths annotations
                                                              annotation-config)))
-    (cl-mapcar (lambda (candidate annotation)
-                 `(,(cl-loop for config in annotation-config
-                             concat
-                             (let* ((padding 3)
-                                    (str (alist-get (plist-get config :name) annotation))
-                                    (width (alist-get (plist-get config :name) annotation-widths))
-                                    (new-str
-                                     (if-let* ((align (plist-get config :align))
-                                               (align-right (eq 'right align)))
-                                         (concat (make-string (- width (length str)) ?\s)
-                                                 str (make-string padding ?\s))
-                                       (concat
-                                        (truncate-string-to-width str width 0 ?\s)
-                                        (make-string padding ?\s)))))
-                               (if-let ((face (plist-get config :face)))
-                                   (propertize new-str 'face face)
-                                 new-str)))
-                   . ,candidate))
-               candidates annotations)))
+    (seq-map (lambda (candidate)
+               `(,(cl-loop for config in annotation-config
+                           concat
+                           (let* ((annotation (alist-get (car candidate) annotations nil nil #'equal))
+                                  (padding 3)
+                                  (str (alist-get (plist-get config :name) annotation))
+                                  (width (alist-get (plist-get config :name) annotation-widths))
+                                  (new-str
+                                   (if-let* ((align (plist-get config :align))
+                                             (align-right (eq 'right align)))
+                                       (concat (make-string (- width (length str)) ?\s)
+                                               str (make-string padding ?\s))
+                                     (concat
+                                      (truncate-string-to-width str width 0 ?\s)
+                                      (make-string padding ?\s)))))
+                             (if-let ((face (plist-get config :face)))
+                                 (propertize new-str 'face face)
+                               new-str)))
+                 . ,(cdr candidate)))
+             candidates)))
 
-(defun ediff-review--annotation-file-type (file)
-  "Return FILE's type."
-  (let-alist (ediff-review--file-info file)
+(defun ediff-review--annotation-file-type (entry)
+  "Return ENTRY's type."
+  (let-alist (cdr entry)
     (pcase .type
       ("A" "ADDED")
       ("D" "DELETED")
       ("M" "MODIFIED")
       (_ "RENAMED"))))
 
-(defun ediff-review--annotation-file-reviewed (file)
-  "Return FILE's review status."
-  (let-alist (ediff-review--file-info file)
+(defun ediff-review--annotation-file-reviewed (entry)
+  "Return ENTRY's review status."
+  (let-alist (cdr entry)
     (if .reviewed
         "REVIEWED"
       "")))
 
-(defun ediff-review--annotation-file-ignored (file)
-  "Return FILE's ignore status."
-  (let-alist (ediff-review--file-info file)
+(defun ediff-review--annotation-file-ignored (entry)
+  "Return ENTRY's ignore status."
+  (let-alist (cdr entry)
     (if .ignore
         "IGNORED"
       "")))
 
-(defun ediff-review--annotation-file-comments (file)
-  "Return FILE's comments status."
-  (let-alist (ediff-review--file-info file)
+(defun ediff-review--annotation-file-comments (entry)
+  "Return ENTRY's comments status."
+  (let-alist (cdr entry)
     (if .comments
         (format "COMMENTS(%s)" (length .comments))
       "")))
