@@ -368,7 +368,7 @@ otherwise create it."
   (when-let ((candidates (seq-map (lambda (file)
                                     `(,file . ,(ediff-review--file-info file)))
                                   (ediff-review--files)))
-             (file-info (ediff-review-completing-read (ediff-review--harmonize-candidate-lengths candidates)
+             (file-info (ediff-review-completing-read candidates
                                                       "Select file: "
                                                       'ediff-review-file
                                                       ediff-review-file-annotation))
@@ -393,7 +393,8 @@ otherwise create it."
 
 (defun ediff-review-completing-read (candidates prompt category annotation-config)
   "Select CANDIDATES from CATEGORY with and PROMPT."
-  (when-let* ((ediff-review--annotation-config annotation-config)
+  (when-let* ((candidates (ediff-review--harmonize-candidate-lengths candidates))
+              (ediff-review--annotation-config annotation-config)
               (ediff-review--annotations (ediff-review--annotations candidates))
               (ediff-review--annotation-widths (ediff-review--annotation-widths))
               (metadata `(metadata
