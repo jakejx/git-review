@@ -54,6 +54,11 @@
   :type 'symbol
   :group 'ediff-review)
 
+(defcustom ediff-review-determine-change-function #'ediff-review-branch-change-function
+  "A function that returns a change value."
+  :type 'symbol
+  :group 'ediff-review)
+
 (defcustom ediff-review-publish-function nil
   "Function that can publish a review."
   :type 'symbol
@@ -320,7 +325,8 @@ otherwise create it."
   (interactive)
   (ediff-review-close-review-file)
   (ediff-review--update-review)
-  (ediff-review-update-db)
+  (when ediff-review-change
+    (ediff-review-update-db))
   (setq ediff-review-change nil)
   (setq ediff-review nil)
   (tab-bar-close-tab))
@@ -419,21 +425,19 @@ otherwise create it."
     (ediff-review-file)))
 
 ;;;###autoload
-(defun ediff-review-patchset (select-branch)
-  "Review current patch-set or SELECT-BRANCH."
-  (interactive "P")
-  (unless ediff-review-change
-    (setq ediff-review-change
-          (format "%s@%s"
-                  (if-let ((branch (and select-branch
-                                        (completing-read "Select base revision: "
-                                                         (ediff-review--other-git-branches)))))
-                      branch
-                    (ediff-review--current-git-branch))
-                  (project-root (project-current)))))
+(defun ediff-review-patchset ()
+  "Review current patchset."
+  (interactive)
+  (setq ediff-review-change (funcall ediff-review-determine-change-function))
   (let* ((default-directory (project-root (project-current))))
     (ediff-review--initialize-review (ediff-review--current-git-branch))
     (ediff-review-start-review)))
+
+(defun ediff-review-branch-change-function ()
+  "Return change value."
+  (format "%s@%s"
+          (ediff-review--current-git-branch)
+          (project-root (project-current))))
 
 ;;;###autoload
 (defun ediff-review-patchsets ()
@@ -738,13 +742,14 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
 
 (defun ediff-review--stored-review (current-revision base-revision)
   "Return a stored review of CURRENT-REVISION and BASE-REVISION."
-  (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
-    (seq-find (lambda (it)
-                (and (equal (let-alist it .current-revision)
-                            current-revision)
-                     (equal (let-alist it .base-revision)
-                            base-revision)))
-              grouped-reviews)))
+  (when ediff-review-change
+    (when-let ((grouped-reviews (alist-get ediff-review-change ediff-review--reviews nil nil #'equal)))
+      (seq-find (lambda (it)
+                  (and (equal (let-alist it .current-revision)
+                              current-revision)
+                       (equal (let-alist it .base-revision)
+                              base-revision)))
+                grouped-reviews))))
 
 (defun ediff-review--restore-buffer-location ()
   "Restore buffer location to nearest diff in revision buffer.
