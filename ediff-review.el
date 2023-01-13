@@ -368,10 +368,10 @@ otherwise create it."
   (when-let ((candidates (seq-map (lambda (file)
                                     `(,file . ,(ediff-review--file-info file)))
                                   (ediff-review--files)))
-             (ediff-review--annotation-config ediff-review-file-annotation)
              (file-info (ediff-review-completing-read (ediff-review--harmonize-candidate-lengths candidates)
                                                       "Select file: "
-                                                      'ediff-review-file))
+                                                      'ediff-review-file
+                                                      ediff-review-file-annotation))
              (file (let-alist file-info .current-filename)))
     (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
     (ediff-review-close-review-file)
@@ -388,12 +388,13 @@ otherwise create it."
     (seq-map (lambda (it)
                (pcase-let* ((`(,str . ,data) it)
                             (new-str (concat str (make-string (- max-width (length str)) ?\s))))
-                 `(,new-str . ,(cdr it))))
+                 `(,new-str . ,data)))
              candidates)))
 
-(defun ediff-review-completing-read (candidates prompt category)
+(defun ediff-review-completing-read (candidates prompt category annotation-config)
   "Select CANDIDATES from CATEGORY with and PROMPT."
-  (when-let* ((ediff-review--annotations (ediff-review--annotations candidates))
+  (when-let* ((ediff-review--annotation-config annotation-config)
+              (ediff-review--annotations (ediff-review--annotations candidates))
               (ediff-review--annotation-widths (ediff-review--annotation-widths))
               (metadata `(metadata
                           (category . ,category)
