@@ -359,23 +359,29 @@ otherwise create it."
 (defun ediff-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let* ((candidates (ediff-review--candidate-annotations
+  (when-let ((candidates (ediff-review--candidate-annotations
                            (ediff-review--files)
                            ediff-review-file-annotation))
-              (metadata `(metadata
-                          (category . ediff-review-file)
+             (file (ediff-review-completing-read candidates
+                                                 "Select file: "
+                                                 'ediff-review-file)))
+    (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
+    (ediff-review-close-review-file)
+    (ediff-review-setup-project-file-review file)
+    (ediff-review-file)))
+
+(defun ediff-review-completing-read (candidates prompt category)
+  "Select CANDIDATES from CATEGORY with and PROMPT."
+  (when-let* ((metadata `(metadata
+                          (category . ,category)
                           (cycle-sort-function . identity)
                           (display-sort-function . identity)))
               (collection (lambda (string predicate action)
                             (if (eq action 'metadata)
                                 metadata
                               (complete-with-action action candidates string predicate))))
-              (candidate (completing-read "Select file: " collection nil t))
-              (file (cdr (assoc candidate candidates))))
-    (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-    (ediff-review-close-review-file)
-    (ediff-review-setup-project-file-review file)
-    (ediff-review-file)))
+              (candidate (completing-read prompt collection nil t)))
+    (cdr (assoc candidate candidates))))
 
 (defun ediff-review-switch-to-most-recent-file ()
   "Switch to most recently reviewed file."
@@ -758,7 +764,7 @@ Optionally instruct function to SET-FILENAME."
     (let ((inhibit-read-only t))
       (call-process-shell-command
        (format "git show --pretty=full --stat %s" revision) nil t))
-    (ediff-review---enable-mode)
+    (text-mode)
     (read-only-mode)))
 
 (defun ediff-review--setup-buffers ()
