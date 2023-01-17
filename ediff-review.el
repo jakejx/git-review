@@ -124,6 +124,8 @@ Each entry in the list is a property list with the following properties:
 
 (defvar ediff-review--current-comment nil)
 (defvar ediff-review--reviews nil)
+
+(defvar ediff-review--candidates nil)
 (defvar ediff-review--annotations nil)
 (defvar ediff-review--annotation-widths nil)
 (defvar ediff-review--annotation-config nil)
@@ -399,9 +401,9 @@ otherwise create it."
 
 (defun ediff-review-completing-read (candidates prompt category annotation-config)
   "Select CANDIDATES from CATEGORY with and PROMPT."
-  (when-let* ((candidates (ediff-review--harmonize-candidate-lengths candidates))
+  (when-let* ((ediff-review--candidates (ediff-review--harmonize-candidate-lengths candidates))
               (ediff-review--annotation-config annotation-config)
-              (ediff-review--annotations (ediff-review--annotations candidates))
+              (ediff-review--annotations (ediff-review--annotations ediff-review--candidates))
               (ediff-review--annotation-widths (ediff-review--annotation-widths))
               (metadata `(metadata
                           (category . ,category)
@@ -411,9 +413,9 @@ otherwise create it."
               (collection (lambda (string predicate action)
                             (if (eq action 'metadata)
                                 metadata
-                              (complete-with-action action candidates string predicate))))
+                              (complete-with-action action ediff-review--candidates string predicate))))
               (candidate (completing-read prompt collection nil t)))
-    (cdr (assoc candidate candidates))))
+    (cdr (assoc candidate ediff-review--candidates))))
 
 (defun ediff-review-switch-to-most-recent-file ()
   "Switch to most recently reviewed file."
