@@ -36,6 +36,7 @@
 (defcustom ediff-review-file-consult-sources
   '(ediff-review-consult--source-files
     ediff-review-consult--source-ignored
+    ediff-review-consult--source-comments
     ediff-review-consult--source-unreviewed)
   "Sources used by `ediff-review-consult-file'.
 
@@ -80,7 +81,22 @@ See `consult-multi' for a description of the source values."
                              (lambda (x)
                                (let-alist (cdr x) .reviewed)))
                             (seq-map #'car))))
-  "All `ediff-review' files as a source for `consult'.")
+  "All unreviewed `ediff-review' files as a source for `consult'.")
+
+(defvar ediff-review-consult--source-comments
+  `(:narrow (?c . "Comments")
+            :hidden t
+            :category ediff-review-file
+            :annotate ediff-review--annotation-function
+            :action ediff-review-consult--decode-file-candidate
+            :items
+            ,(lambda ()
+               (thread-last ediff-review--candidates
+                            (seq-filter
+                             (lambda (x)
+                               (let-alist (cdr x) .comments)))
+                            (seq-map #'car))))
+  "All `ediff-review' files with comments as a source for `consult'.")
 
 ;;;; Functions
 
