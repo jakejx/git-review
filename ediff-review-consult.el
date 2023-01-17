@@ -46,7 +46,7 @@ See `consult-multi' for a description of the source values."
 (defvar ediff-review-consult--source-files
   `(:category ediff-review-file
               :annotate ediff-review--annotation-function
-              :action ediff-review-consult--decode-change-candidate
+              :action ediff-review-consult--decode-file-candidate
               :items
               ,(lambda ()
                  (seq-map #'car ediff-review--candidates)))
@@ -57,7 +57,7 @@ See `consult-multi' for a description of the source values."
             :hidden t
             :category ediff-review-file
             :annotate ediff-review--annotation-function
-            :action ediff-review-consult--decode-change-candidate
+            :action ediff-review-consult--decode-file-candidate
             :items
             ,(lambda ()
                (thread-last ediff-review--candidates
@@ -72,7 +72,7 @@ See `consult-multi' for a description of the source values."
             :hidden t
             :category ediff-review-file
             :annotate ediff-review--annotation-function
-            :action ediff-review-consult--decode-change-candidate
+            :action ediff-review-consult--decode-file-candidate
             :items
             ,(lambda ()
                (thread-last ediff-review--candidates
@@ -105,9 +105,9 @@ See `consult-multi' for a description of the source values."
 
 ;;;; Support functions
 
-(defun ediff-review-consult--decode-change-candidate (candidate)
+(defun ediff-review-consult--decode-file-candidate (candidate)
   "Return change matching CANDIDATE."
-  (message "Selected: %s" (assoc candidate ediff-review--candidates)))
+  (ediff-review--switch-file candidate))
 
 (provide 'ediff-review-consult)
 

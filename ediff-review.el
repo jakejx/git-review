@@ -352,22 +352,14 @@ otherwise create it."
   "Review next file."
   (interactive)
   (if-let ((next-file (ediff-review--next-file)))
-      (progn
-        (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-        (ediff-review-close-review-file)
-        (ediff-review-setup-project-file-review next-file)
-        (ediff-review-file))
+      (ediff-review--switch-file next-file)
     (message "No next file")))
 
 (defun ediff-review-previous-file ()
   "Review previous file."
   (interactive)
   (if-let ((previous-file (ediff-review--previous-file)))
-      (progn
-        (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-        (ediff-review-close-review-file)
-        (ediff-review-setup-project-file-review previous-file)
-        (ediff-review-file))
+      (ediff-review--switch-file previous-file)
     (message "No previous file")))
 
 (defun ediff-review-select-file ()
@@ -381,10 +373,7 @@ otherwise create it."
                                                       'ediff-review-file
                                                       ediff-review-file-annotation))
              (file (let-alist file-info .current-filename)))
-    (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
-    (ediff-review-close-review-file)
-    (ediff-review-setup-project-file-review file)
-    (ediff-review-file)))
+    (ediff-review--switch-file file)))
 
 (defun ediff-review--harmonize-candidate-lengths (candidates)
   "Return CANDIDATES with same length."
@@ -543,6 +532,13 @@ otherwise create it."
   (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 ;;;; Support functions
+
+(defun ediff-review--switch-file (file)
+  "Switch to FILE."
+  (setf (alist-get 'recent-file ediff-review) (ediff-review--current-file))
+  (ediff-review-close-review-file)
+  (ediff-review-setup-project-file-review file)
+  (ediff-review-file))
 
 (defun ediff-review--project-root ()
   "Return the project root of the current review."
