@@ -330,7 +330,7 @@ otherwise create it."
   (interactive)
   (if (frame-live-p ediff-review--conversation-frame)
       (progn
-        (delete-frame ediff-review--conversation-frame)
+        (make-frame-invisible ediff-review--conversation-frame t)
         (kill-buffer "*ediff-review-conversation*"))
     (when-let ((comment (ediff-review--comment-at-point)))
       (let* ((parent-frame (window-frame))
