@@ -70,8 +70,9 @@
   :group 'ediff-review)
 
 (defcustom ediff-review-comment-buffer-action
-  '(display-buffer-at-bottom
-    (window-height . 0.33))
+  '(display-buffer-in-side-window
+    (side . bottom)
+    (slot . -1))
   "The action used to display a comment."
   :group 'ediff-review
   :type 'sexp)
@@ -129,6 +130,8 @@ Each entry in the list is a property list with the following properties:
 (defvar ediff-review--annotations nil)
 (defvar ediff-review--annotation-widths nil)
 (defvar ediff-review--annotation-config nil)
+
+(defvar ediff-review--conversation-frame nil)
 
 ;;;; Faces
 
@@ -322,6 +325,37 @@ otherwise create it."
 
 ;;;; Commands
 
+(defun ediff-review-toggle-conversation ()
+  "Toggle conversation."
+  (interactive)
+  (if (frame-live-p ediff-review--conversation-frame)
+      (progn
+        (delete-frame ediff-review--conversation-frame)
+        (kill-buffer "*ediff-review-conversation*"))
+    (when-let ((comment (ediff-review--comment-at-point)))
+      (let* ((parent-frame (window-frame))
+             (child-frame (make-frame
+                           `((parent-frame . ,parent-frame)
+                             (child-frame-border-width . 1)
+                             (visibility . nil)
+                             (desktop-dont-save . t)
+                             ,@default-frame-alist)))
+             (buffer (get-buffer-create "*ediff-review-conversation*"))
+             (window (frame-root-window child-frame)))
+        (setq ediff-review--conversation-frame child-frame)
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert (let-alist comment .message))
+            (gfm-view-mode)))
+        (pcase-let ((`(,x-start ,y-start ,x-end ,y-end) (window-edges (selected-window) t nil t)))
+          (set-window-buffer window buffer)
+          (set-window-dedicated-p window t)
+          (set-frame-size child-frame (/ (- x-end x-start) 2) ( / (- y-end y-start) 3) t)
+          (set-frame-position child-frame x-start ( / (+ y-start y-end) 2)))
+        (make-frame-visible child-frame)
+        (redirect-frame-focus child-frame parent-frame)))))
+
 (defun ediff-review-quit ()
   "Quit `ediff-review' review."
   (interactive)
@@ -474,17 +508,21 @@ otherwise create it."
   (interactive)
   (select-window (ediff-review--control-window)))
 
+(defun ediff-review--comment-at-point ()
+  "Return comment at point."
+  (let-alist (ediff-review--file-info)
+    (thread-last .comments
+                 (seq-find (lambda (it)
+                             (let-alist it
+                               (<= .location.start-point (point) .location.end-point))))
+                 (cdr))))
+
 (defun ediff-review-comment ()
   "Add or edit a comment."
   (interactive)
   (setq ediff-review--current-comment
         (or
-         (let-alist (ediff-review--file-info)
-           (thread-last .comments
-                        (seq-find (lambda (it)
-                                    (let-alist it
-                                      (<= .location.start-point (point) .location.end-point))))
-                        (cdr)))
+         (ediff-review--comment-at-point)
          (ediff-review--create-comment)))
   (let* ((buffer (get-buffer-create "*ediff-review-comment*")))
     (display-buffer buffer ediff-review-comment-buffer-action)
@@ -1150,10 +1188,10 @@ in the database.  Plus storing them doesn't make sense."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "a") #'ediff-review-jump-to-a)
     (define-key map (kbd "b") #'ediff-review-jump-to-b)
+    (define-key map (kbd "f") #'ediff-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'ediff-review-quit)
-    (define-key map (kbd "s") #'ediff-review-select-file)
     (define-key map (kbd "S") #'ediff-review-publish-review)
     (define-key map (kbd "n") #'ediff-review-next-hunk)
     (define-key map (kbd "p") #'ediff-review-previous-hunk)
@@ -1186,6 +1224,7 @@ in the database.  Plus storing them doesn't make sense."
             (define-key map (kbd "C-c C-c") #'ediff-review-jump-to-control)
             (define-key map (kbd "C-c C-'") #'ediff-review-comment)
             (define-key map (kbd "C-c C-k") #'ediff-review-kill-comment)
+            (define-key map (kbd "<tab>") #'ediff-review-toggle-conversation)
             map))
 
 (provide 'ediff-review)
