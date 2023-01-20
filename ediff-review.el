@@ -358,7 +358,7 @@ otherwise create it."
           (set-window-buffer window buffer)
           (set-window-dedicated-p window t)
           (set-frame-size child-frame (/ (- x-end x-start) 2) ( / (- y-end y-start) 3) t)
-          (set-frame-position child-frame x-start ( / (+ y-start y-end) 2)))
+          (set-frame-position child-frame (+ x-start (/ (- x-end x-start) 4)) ( / (+ y-start y-end) 2)))
         (make-frame-visible child-frame)
         (redirect-frame-focus parent-frame child-frame)))))
 
