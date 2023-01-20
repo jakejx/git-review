@@ -391,6 +391,42 @@ otherwise create it."
   (setq ediff-review nil)
   (tab-bar-close-tab))
 
+(defun ediff-review-next-comment ()
+  "Go to next comment."
+  (interactive)
+  (if-let ((comment (ediff-review--next-comment)))
+      (progn
+        (ediff-review--restore-overlays)
+        ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
+        (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+          (goto-char (let-alist comment  .location.start-point)))
+        (save-excursion
+          (with-selected-window (ediff-review--control-window)
+            (let ((last-command-event ?b))
+              (ediff-jump-to-difference-at-point nil))
+            (ediff-review---maybe-modify-overlays)))
+        (ediff-review---maybe-modify-overlays)
+        (ediff-review--maybe-set-reviewed))
+    (message "No next comment found")))
+
+(defun ediff-review-previous-comment ()
+  "Go to previous comment."
+  (interactive)
+  (if-let ((comment (ediff-review--previous-comment)))
+      (progn
+        (ediff-review--restore-overlays)
+        ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
+        (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+          (goto-char (let-alist comment  .location.start-point)))
+        (save-excursion
+          (with-selected-window (ediff-review--control-window)
+            (let ((last-command-event ?b))
+              (ediff-jump-to-difference-at-point nil))
+            (ediff-review---maybe-modify-overlays)))
+        (ediff-review---maybe-modify-overlays)
+        (ediff-review--maybe-set-reviewed))
+    (message "No previous comment found")))
+
 (defun ediff-review-next-hunk ()
   "Go to next hunk."
   (interactive)
@@ -1128,6 +1164,26 @@ in the database.  Plus storing them doesn't make sense."
                            (let-alist (cdr it)
                              (not .ignore))))
                (car)))
+
+(defun ediff-review--next-comment ()
+  "Return next comment."
+  (when-let* ((comments (let-alist (ediff-review--file-info) .comments))
+              (next-comment-id (thread-last comments
+                                            (seq-map (lambda (it) (let-alist (cdr it) (cons (- .location.start-point (point)) .id))))
+                                            (seq-sort-by (lambda (it) (car it)) #'<)
+                                            (seq-find (lambda (it) (> (car it) 0)))
+                                            (cdr))))
+    (alist-get next-comment-id comments)))
+
+(defun ediff-review--previous-comment ()
+  "Return previous comment."
+  (when-let* ((comments (let-alist (ediff-review--file-info) .comments))
+              (previous-comment-id (thread-last comments
+                                            (seq-map (lambda (it) (let-alist (cdr it) (cons (- .location.start-point (point)) .id))))
+                                            (seq-sort-by (lambda (it) (car it)) #'<)
+                                            (seq-find (lambda (it) (< (car it) 0)))
+                                            (cdr))))
+    (alist-get previous-comment-id comments)))
 
 (defun ediff-review--annotations (candidates)
   "Return annotations of CANDIDATES."
