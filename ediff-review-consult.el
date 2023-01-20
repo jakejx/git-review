@@ -50,7 +50,9 @@ See `consult-multi' for a description of the source values."
               :action ediff-review-consult--decode-file-candidate
               :items
               ,(lambda ()
-                 (seq-map #'car ediff-review--candidates)))
+                 (thread-last ediff-review--candidates
+                              (seq-remove #'ediff-review-consult--ignore-file-p)
+                              (seq-map #'car))))
   "All `ediff-review' files as a source for `consult'.")
 
 (defvar ediff-review-consult--source-ignored
@@ -62,9 +64,7 @@ See `consult-multi' for a description of the source values."
             :items
             ,(lambda ()
                (thread-last ediff-review--candidates
-                            (seq-filter
-                             (lambda (x)
-                               (let-alist (cdr x) .ignore)))
+                            (seq-filter #'ediff-review-consult--ignore-file-p)
                             (seq-map #'car))))
   "All `ediff-review' files as a source for `consult'.")
 
@@ -77,6 +77,7 @@ See `consult-multi' for a description of the source values."
             :items
             ,(lambda ()
                (thread-last ediff-review--candidates
+                            (seq-remove #'ediff-review-consult--ignore-file-p)
                             (seq-remove
                              (lambda (x)
                                (let-alist (cdr x) .reviewed)))
@@ -92,6 +93,7 @@ See `consult-multi' for a description of the source values."
             :items
             ,(lambda ()
                (thread-last ediff-review--candidates
+                            (seq-remove #'ediff-review-consult--ignore-file-p)
                             (seq-filter
                              (lambda (x)
                                (let-alist (cdr x) .comments)))
@@ -120,6 +122,10 @@ See `consult-multi' for a description of the source values."
                     :sort nil)))
 
 ;;;; Support functions
+
+(defun ediff-review-consult--ignore-file-p (file)
+  "Return t if FILE should be ignored."
+  (let-alist file .ignore))
 
 (defun ediff-review-consult--decode-file-candidate (candidate)
   "Return change matching CANDIDATE."
