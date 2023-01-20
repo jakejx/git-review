@@ -346,15 +346,21 @@ otherwise create it."
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)
-            (insert (let-alist comment .message))
-            (gfm-view-mode)))
+            (ediff-review-conversation-mode)
+            (let-alist comment
+              (insert (propertize (format "%s:\n" ediff-review-user) 'face 'font-lock-constant-face))
+              (insert (with-temp-buffer
+                        (insert .message)
+                        (gfm-view-mode)
+                        (font-lock-ensure)
+                        (buffer-substring (point-min) (point-max)))))))
         (pcase-let ((`(,x-start ,y-start ,x-end ,y-end) (window-edges (selected-window) t nil t)))
           (set-window-buffer window buffer)
           (set-window-dedicated-p window t)
           (set-frame-size child-frame (/ (- x-end x-start) 2) ( / (- y-end y-start) 3) t)
           (set-frame-position child-frame x-start ( / (+ y-start y-end) 2)))
         (make-frame-visible child-frame)
-        (redirect-frame-focus child-frame parent-frame)))))
+        (redirect-frame-focus parent-frame child-frame)))))
 
 (defun ediff-review-quit ()
   "Quit `ediff-review' review."
@@ -1204,6 +1210,15 @@ in the database.  Plus storing them doesn't make sense."
   (read-only-mode)
   (rename-buffer
    (ediff-review--review-buffer-name)))
+
+(defvar ediff-review-conversation-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<tab>") #'ediff-review-toggle-conversation)
+    map))
+
+(define-derived-mode ediff-review-conversation-mode fundamental-mode "Ediff Review Conversation"
+  (setq-local mode-line-format nil)
+  (read-only-mode))
 
 ;;;; Minor modes
 
