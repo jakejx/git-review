@@ -336,11 +336,12 @@ otherwise create it."
       (let* ((parent-frame (window-frame))
              (child-frame (make-frame
                            `((parent-frame . ,parent-frame)
+                             (minibuffer . ,(minibuffer-window parent-frame))
                              (child-frame-border-width . 1)
                              (visibility . nil)
                              (desktop-dont-save . t)
                              (tab-bar-lines . 0)
-                             (vertical-scroll-bars)
+                             ;; (vertical-scroll-bars . t)
                              (tool-bar-lines . 0)
                              (menu-bar-lines . 0))))
              (buffer (get-buffer-create "*ediff-review-conversation*"))
@@ -352,7 +353,7 @@ otherwise create it."
             (erase-buffer)
             (ediff-review-conversation-mode)
             (let-alist comment
-              (insert (propertize (format "%s:\n" ediff-review-user) 'face 'font-lock-constant-face))
+              (insert (propertize (format "%s:\n" ediff-review-user) 'face 'org-block-begin-line))
               (insert (with-temp-buffer
                         (insert .message)
                         (gfm-view-mode)
@@ -363,8 +364,7 @@ otherwise create it."
         (set-window-buffer window buffer)
         (set-window-dedicated-p window t)
         (ediff-review--conversation-frame-configure-size child-frame comment line-count)
-        (make-frame-visible child-frame)
-        (redirect-frame-focus parent-frame child-frame)))))
+        (make-frame-visible child-frame)))))
 
 (defun ediff-review--conversation-frame-configure-size (frame comment line-count)
   "Configure size of FRAME using info from COMMENT and LINE-COUNT."
@@ -373,7 +373,7 @@ otherwise create it."
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,window-y-start ,_ ,window-y-end) (window-edges (selected-window) t t t))
                  (frame-width (* (window-font-width) 120))
-                 (frame-height (min (* (window-font-height) line-count)
+                 (frame-height (min (* (line-pixel-height) line-count)
                                         (- window-y-end (cdr (window-absolute-pixel-position (point))))))
                  (x-position (- (car (window-absolute-pixel-position (point))) frame-x-start))
                  (y-position (- (cdr (window-absolute-pixel-position (point))) (window-font-height))))
