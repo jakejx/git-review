@@ -857,15 +857,18 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
 This is done for files that has already been reviewed before and where
 there is a previous location to return to."
   (let-alist (ediff-review--file-info)
-    (when (and .buffer-location
+    (if (and .buffer-location
                ; `ediff' complains when location is at start of buffer
-               (> .buffer-location.b 1))
-      (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
-        (goto-char .buffer-location.b))
+             (> .buffer-location.b 1))
+        (progn
+          (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+            (goto-char .buffer-location.b))
+          (with-selected-window (ediff-review--control-window)
+            (let ((last-command-event ?b))
+              (ediff-jump-to-difference-at-point nil))
+            (ediff-review---maybe-modify-overlays)))
       (with-selected-window (ediff-review--control-window)
-        (let ((last-command-event ?b))
-          (ediff-jump-to-difference-at-point nil))
-        (ediff-review---maybe-modify-overlays)))))
+        (ediff-next-difference)))))
 
 (defun ediff-review--control-window ()
   "Return window for variable `ediff-control-buffer'."
