@@ -325,6 +325,16 @@ otherwise create it."
 
 ;;;; Commands
 
+(defun ediff-review-open-patchset-diff ()
+  "Open diff buffer with patch-set."
+  (interactive)
+  (let* ((default-directory (project-root (project-current)))
+         (revision (ediff-review--current-revision)))
+    (vc-diff-internal t
+                      (list (vc-responsible-backend default-directory) (list default-directory))
+                      (concat revision "~1")
+                      revision)))
+
 (defun ediff-review-toggle-conversation ()
   "Toggle conversation."
   (interactive)
@@ -1275,6 +1285,7 @@ in the database.  Plus storing them doesn't make sense."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "a") #'ediff-review-jump-to-a)
     (define-key map (kbd "b") #'ediff-review-jump-to-b)
+    (define-key map (kbd "d") #'ediff-review-open-patchset-diff)
     (define-key map (kbd "f") #'ediff-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
