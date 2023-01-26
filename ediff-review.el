@@ -877,7 +877,8 @@ there is a previous location to return to."
               (ediff-jump-to-difference-at-point nil))
             (ediff-review---maybe-modify-overlays)))
       (with-selected-window (ediff-review--control-window)
-        (ediff-next-difference)))))
+        (ediff-next-difference)
+        (ediff-review--maybe-set-reviewed)))))
 
 (defun ediff-review--control-window ()
   "Return window for variable `ediff-control-buffer'."
