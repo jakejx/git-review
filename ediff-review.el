@@ -394,7 +394,9 @@ otherwise create it."
 (defun ediff-review-next-comment ()
   "Go to next comment."
   (interactive)
-  (if-let ((comment (ediff-review--next-comment)))
+  (if-let ((comment (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+                      (save-excursion
+                        (ediff-review--next-comment)))))
       (progn
         (ediff-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
@@ -412,7 +414,9 @@ otherwise create it."
 (defun ediff-review-previous-comment ()
   "Go to previous comment."
   (interactive)
-  (if-let ((comment (ediff-review--previous-comment)))
+  (if-let ((comment (with-selected-window (get-buffer-window ediff-review-current-revision-buffer)
+                      (save-excursion
+                        (ediff-review--previous-comment)))))
       (progn
         (ediff-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
