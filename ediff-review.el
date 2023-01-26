@@ -328,12 +328,11 @@ otherwise create it."
 (defun ediff-review-open-patchset-diff ()
   "Open diff buffer with patch-set."
   (interactive)
-  (let* ((default-directory (project-root (project-current)))
-         (revision (ediff-review--current-revision)))
+  (let* ((default-directory (project-root (project-current))))
     (vc-diff-internal t
                       (list (vc-responsible-backend default-directory) (list default-directory))
-                      (concat revision "~1")
-                      revision)))
+                      (ediff-review--base-revision)
+                      (ediff-review--current-revision))))
 
 (defun ediff-review-toggle-conversation ()
   "Toggle conversation."
