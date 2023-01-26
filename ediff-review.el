@@ -380,7 +380,7 @@ otherwise create it."
   (save-excursion
     (let-alist comment (goto-char (overlay-start .header-overlay)))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
-                 (`(,_ ,window-y-start ,_ ,window-y-end) (window-edges (selected-window) t t t))
+                 (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
                  (frame-width (* (window-font-width) 120))
                  (frame-height (min (* (line-pixel-height) line-count)
                                         (- window-y-end (cdr (window-absolute-pixel-position (point))))))
@@ -906,10 +906,33 @@ Optionally instruct function to SET-FILENAME."
   "Populate BUFFER with commit message from REVISION."
   (with-current-buffer buffer
     (let ((inhibit-read-only t))
-      (call-process-shell-command
-       (format "git show --pretty=full --stat %s" revision) nil t))
-    (text-mode)
+      (insert (concat (ediff-review--commit-message-header revision) "\n\n"))
+      (insert (with-temp-buffer
+                (call-process-shell-command
+                 (format "git show --pretty=format:\"%s\" --no-patch %s" "%s" revision) nil t)
+                (concat (propertize (buffer-string) 'face 'font-lock-keyword-face) "\n\n")))
+      (insert (with-temp-buffer
+                (call-process-shell-command
+                 (format "git show --pretty=format:\"%s\" --no-patch %s" "%b" revision) nil t)
+                (propertize (buffer-string) 'face 'italic))))
+    (ediff-review-minor-mode)
     (read-only-mode)))
+
+(defun ediff-review--commit-message-header (revision)
+  "Return propertized commit header for REVISION."
+  (let* ((re (rx bol (group (regexp ".*?:")) (group (regexp ".*"))))
+         (components)
+         (pretty-format "Parent:     %p%nAuthor:     %aN <%ae>%nAuthorDate: %ai%nCommit:     %cN <%ce>%nCommitDate: %ci")
+         (commit-header (with-temp-buffer
+                          (call-process-shell-command
+                           (format "git show --pretty=format:\"%s\" --no-patch %s" pretty-format revision) nil t)
+                          (goto-char (point-min))
+                          (while (search-forward-regexp re nil t)
+                            (push (concat (propertize (match-string 1) 'face 'font-lock-comment-face)
+                                          (propertize (match-string 2) 'face 'font-lock-comment-face))
+                                  components))
+                          (string-join components "\n"))))
+    commit-header))
 
 (defun ediff-review--setup-buffers ()
   "Setup buffers for `ediff-review'."
