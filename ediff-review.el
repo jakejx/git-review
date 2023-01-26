@@ -919,7 +919,7 @@ Optionally instruct function to SET-FILENAME."
                                                              (ediff-review--current-file))))
                                  (cdr))))
     (funcall mode))
-  (ediff-review-minor-mode-mode))
+  (ediff-review-minor-mode))
 
 (defun ediff-review--restore-overlays ()
   "Restore altered overlays."
@@ -1305,7 +1305,7 @@ in the database.  Plus storing them doesn't make sense."
             (define-key map (kbd "C-c C-k") #'ediff-review-quit-comment)
             map))
 
-(define-minor-mode ediff-review-minor-mode-mode
+(define-minor-mode ediff-review-minor-mode
   "Minor mode for `ediff-review'."
   :global nil
   :lighter "Ediff Review"
