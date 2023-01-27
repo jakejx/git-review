@@ -203,7 +203,7 @@ otherwise create it."
 
 (defun git-review-start-review ()
   "Start review."
-  (let ((git-review-tab "Git-Review Review"))
+  (let ((git-review-tab "Git Review"))
     (when (not (member git-review-tab
                        (mapcar (lambda (tab)
                                  (alist-get 'name tab))
