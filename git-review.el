@@ -649,8 +649,7 @@ otherwise create it."
   ;; push it in like this. There needs to be a proper update
   (setq git-review--current-conversation
         (plist-put git-review--current-conversation :comments
-                   `(,(plist-get git-review--current-conversation :comments)
-                     ,git-review--current-comment)))
+                   (append `(,git-review--current-comment) (plist-get git-review--current-conversation :comments))))
   (push git-review--current-conversation
         git-review--conversations)
 
@@ -1240,17 +1239,16 @@ in the database.  Plus storing them doesn't make sense."
 
 (defun git-review--restore-comment-overlays ()
   "Restore comment overlays in the current file."
-  (when (git-review--has-comments-p (git-review--current-file))
-      (seq-do (lambda (it)
-                (let ((comment (cdr it)))
-                  (setq git-review--current-comment comment)
-                  (let-alist git-review--current-comment
-                    (setf (alist-get 'header-overlay git-review--current-comment) nil)
-                    (setf (alist-get 'comment-overlay git-review--current-comment) nil)
-                    (git-review--add-comment-overlay)
-                    (git-review--update-comments .id git-review--current-comment))
-                  (setq git-review--current-comment nil)))
-              (let-alist (git-review--file-info) .comments))))
+  (thread-last git-review--conversations
+               (seq-filter (lambda (it) (equal (plist-get it :filename) (git-review--current-file))))
+               (seq-do (lambda (it)
+                         (setq git-review--current-conversation it)
+                         (setq git-review--current-comment (thread-last (plist-get it :comments)
+                                                                        (seq-first)))
+                         (git-review--add-comment-overlay)
+                         ;; (git-review--update-comments .id git-review--current-comment)
+                         (setq git-review--current-conversation nil)
+                         (setq git-review--current-comment nil)))))
 
 (defun git-review--next-file ()
   "Return next file."
