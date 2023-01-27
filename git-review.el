@@ -1198,36 +1198,41 @@ in the database.  Plus storing them doesn't make sense."
     (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
       (let* ((buffer-overlays (overlays-in (point-min) (point-max)))
              (ov (or (thread-last buffer-overlays
-                                  (seq-find (lambda (ov) (and (overlay-get ov 'git-review-conversastion-id)
+                                  (seq-find (lambda (ov) (and (overlay-get ov 'git-review-conversation-id)
                                                          (eq 'region (overlay-get ov 'git-review-overlay-type))))))
                      (make-overlay (let-alist (plist-get git-review--current-conversation :location) .start-point)
                                    (let-alist (plist-get git-review--current-conversation :location) .end-point)))))
         (overlay-put ov 'git-review-conversation-id (plist-get git-review--current-conversation :id))
         (overlay-put ov 'git-review-overlay-type 'region)
         (overlay-put ov 'face 'ansi-color-fast-blink))
-      ;; (git-review--add-comment-header-overlay)
-      )))
+      (git-review--add-comment-header-overlay))))
 
 (defun git-review--add-comment-header-overlay ()
   "Add a comment header overlay."
-  (let-alist git-review--current-comment
-    (with-current-buffer (if (eq .side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
+  (let* ((side (plist-get git-review--current-conversation :side))
+         (start-point (let-alist (plist-get git-review--current-conversation :location) .start-point)))
+    (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
       (save-excursion
-        (goto-char .location.start-point)
+        (goto-char start-point)
         (beginning-of-line)
+        (when-let* ((buffer-overlays (overlays-in (point-min) (point-max)))
+                    (ov (thread-last buffer-overlays
+                                     (seq-find (lambda (ov) (and (overlay-get ov 'git-review-conversation-id)
+                                                            (eq 'header (overlay-get ov 'git-review-overlay-type))))))))
+          (message "Deleting overlay")
+          (delete-overlay ov))
         (let* ((ov (make-overlay (point) (point)))
                (time (let-alist git-review--current-comment
-                       (when .timestamp
-                         (format-time-string "%Y-%m-%d %a %H:%M:%S" .timestamp))))
-               (comment-message (let-alist git-review--current-comment .message))
+                       (when (plist-get git-review--current-comment :timestamp)
+                         (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get git-review--current-comment :timestamp)))))
+               (comment-message (plist-get git-review--current-comment :message))
                (summary (seq-elt (split-string comment-message "\n") 0))
                (summary-str (truncate-string-to-width summary 30))
                (comment-header
                 (concat git-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) "\n")))
-          (when .header-overlay
-            (delete-overlay .header-overlay))
-          (setf (alist-get 'header-overlay git-review--current-comment) ov)
-          (overlay-put ov 'git-review-comment .id)
+
+          (overlay-put ov 'git-review-conversation-id (plist-get git-review--current-conversation :id))
+          (overlay-put ov 'git-review-overlay-type 'header)
           (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header)))))))
 
 (defun git-review--restore-comment-overlays ()
