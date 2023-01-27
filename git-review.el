@@ -128,8 +128,10 @@ Each entry in the list is a property list with the following properties:
 ;;;; Private
 
 (defvar git-review--patchset nil "The current patchset.")
+(defvar git-review--conversations nil "List of conversations.")
 
 (defvar git-review--current-comment nil)
+(defvar git-review--current-conversation nil)
 (defvar git-review--reviews nil)
 
 (defvar git-review--candidates nil)
@@ -580,29 +582,41 @@ otherwise create it."
   (interactive)
   (select-window (git-review--control-window)))
 
-(defun git-review--comment-at-point ()
-  "Return comment at point."
-  (let-alist (git-review--file-info)
-    (thread-last .comments
-                 (seq-find (lambda (it)
-                             (let-alist it
-                               (<= .location.start-point (point) .location.end-point))))
-                 (cdr))))
+(defun git-review--conversation-at-point ()
+  "Return conversation at point."
+  (when-let* ((overlays (overlays-at (point)))
+              (conversation-id (seq-find (lambda (ov)
+                                           (overlay-get ov 'git-review-conversation-id))
+                                         overlays)))
+    (seq-find (lambda (conversation)
+                (equal conversation-id (let-alist conversation .id)))
+              git-review--conversations)))
 
-(defun git-review-comment ()
-  "Add or edit a comment."
+(defun git-review-conversation-dwim ()
+  "Continue on, or start a new, conversation."
   (interactive)
-  (setq git-review--current-comment
+  (setq git-review--current-conversation
         (or
-         (git-review--comment-at-point)
-         (git-review--create-comment)))
+         (git-review--conversation-at-point)
+         (git-review--create-conversation)))
   (let* ((buffer (get-buffer-create "*git-review-comment*")))
     (display-buffer buffer git-review-comment-buffer-action)
     (with-current-buffer buffer
       (erase-buffer)
-      (let-alist git-review--current-comment
-        (when .message (insert .message)))
-
+      (if-let* ((comments (let-alist git-review--current-conversation .comments))
+                (comment (and (not (seq-empty-p comments))
+                              (thread-last comments
+                                           (seq-reverse)
+                                           (seq-first)))))
+          (let-alist comment
+            (if .draft
+                (progn
+                  (insert .message)
+                  (setq git-review--current-comment comment))
+              (message "Warning: Cannot reply to this comment")))
+        (setq git-review--current-comment `((user . ,git-review-user)
+                                            (draft . t)
+                                            (id . ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))))))
       (when git-review-comment-major-mode
         (funcall git-review-comment-major-mode))
       (git-review-comment-mode)
@@ -627,18 +641,26 @@ otherwise create it."
 (defun git-review-complete-comment ()
   "Complete the review comment."
   (interactive)
-  (setf (alist-get 'message git-review--current-comment)
-        (buffer-substring-no-properties (point-min) (point-max)))
-  (git-review--add-comment-overlay)
-  (git-review--update-comments (let-alist git-review--current-comment .id)
-                                 git-review--current-comment)
+  (let ((comment git-review--current-comment))
+    (setf (alist-get 'message comment)
+          (buffer-substring-no-properties (point-min) (point-max)))
+    ;; TODO(Niklas Eklund, 20230127): If comment is updated we cannot
+    ;; push it in like this. There needs to be a proper update
+    (let* ((conversations git-review--current-conversation)
+           (comments (alist-get 'comments conversations)))
+      (setf (alist-get 'comments conversations)
+            (vconcat `[,comment] comments)))
+    (setq git-review--conversations
+          (vconcat `[,git-review--current-conversation] git-review--conversations)))
+  ;; (git-review--add-comment-overlay)
   (setq git-review--current-comment nil)
+  (setq git-review--current-conversation nil)
   (quit-restore-window))
 
 (defun git-review-quit-comment ()
   "Quit review comment."
   (interactive)
-  (setq git-review--current-comment nil)
+  (setq git-review--current-conversation nil)
   (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 ;;;; Support functions
@@ -768,8 +790,6 @@ Unless COMMENT is nil, then delete ID."
 
 (defun git-review--initialize-review ()
   "Initialize review of `gerrit-review-patchset'."
-  ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review
-  ;; (git-review--stored-review)
   (let* ((git-review-change (funcall git-review-determine-change-function))
          (git-review-patchset (funcall git-review-determine-patchset-function))
         (commit-hash (with-temp-buffer
@@ -783,7 +803,11 @@ Unless COMMENT is nil, then delete ID."
                                  (number . ,git-review-patchset)
                                  (change . ,git-review-change)
                                  (review-progress . [])
-                                 (files . ,(git-review--generate-patchset-files)))))
+                                 (files . ,(git-review--generate-patchset-files))))
+    (setq git-review--conversations nil))
+
+  ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review from database
+  ;; (git-review--stored-review)
 
   ;; TODO(Niklas Eklund, 20230127): Move to other location when a
   ;; different patchset is selected. Or maybe it needs to be here in
@@ -1116,6 +1140,22 @@ Optionally instruct function to SET-FILENAME."
             number-of-files
             progress)))
 
+(defun git-review--create-conversation ()
+  "Create a conversation."
+  (let* ((start-position (min (mark) (point)))
+         (end-position (max (mark) (point)))
+         (location
+          `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
+            (start-column . ,(save-excursion (goto-char start-position) (current-column)))
+            (end-line . ,(save-excursion (goto-char end-position) (current-line)))
+            (end-column . ,(save-excursion (goto-char end-position) (current-column)))))
+         (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
+    `((id . ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
+      (filename . ,(git-review--current-file))
+      (comments . [])
+      (location . ,location)
+      (side . ,side))))
+
 (defun git-review--create-comment ()
   "Create a new comment and return it."
   (let* ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
@@ -1130,6 +1170,7 @@ Optionally instruct function to SET-FILENAME."
             (end-column . ,(save-excursion (goto-char end-position) (current-column)))
             (end-point . ,end-position))))
     `((id . ,id)
+      (draft . t)
       (side . ,side)
       (location . ,location))))
 
@@ -1203,7 +1244,7 @@ in the database.  Plus storing them doesn't make sense."
                (seq-rest)
                (seq-find (lambda (it)
                            (let-alist it .filename
-                             (not .ignore))))
+                                      (not .ignore))))
                (funcall (lambda (it)
                           (let-alist it .filename)))))
 
@@ -1370,7 +1411,7 @@ in the database.  Plus storing them doesn't make sense."
   :lighter "Ediff Review"
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c C-c") #'git-review-jump-to-control)
-            (define-key map (kbd "C-c C-'") #'git-review-comment)
+            (define-key map (kbd "C-c C-'") #'git-review-conversation-dwim)
             (define-key map (kbd "C-c C-k") #'git-review-kill-comment)
             (define-key map (kbd "<tab>") #'git-review-toggle-conversation)
             map))
