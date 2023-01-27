@@ -50,12 +50,13 @@ A change is an alist.
 A patchset is an alist.
 
 #+begin_src elisp
-  '((current-file . "file1.cpp")
+  '((commit-hash . "sha1")
+    (parent-hash . "sha1")
+    (current-file . "file1.cpp")
     (previous-file . "file2.cpp")
     (base-patchset . 1) ; Optional
     (files . '(("foo.cpp" . file-info)
-               ("bar.cpp" . file-info)))
-    (commit-id . "sha1"))
+               ("bar.cpp" . file-info))))
 #+end_src
 
 *** Conversations
