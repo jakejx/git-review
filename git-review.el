@@ -54,8 +54,13 @@
   :type 'symbol
   :group 'git-review)
 
-(defcustom git-review-determine-change-function #'git-review-branch-change-function
+(defcustom git-review-determine-change-function nil
   "A function that returns a change value."
+  :type 'symbol
+  :group 'git-review)
+
+(defcustom git-review-determine-patchset-function nil
+  "A function that returns a patchset value."
   :type 'symbol
   :group 'git-review)
 
@@ -121,7 +126,11 @@ Each entry in the list is a property list with the following properties:
 (defvar git-review-current-revision-buffer nil
   "Points to the buffer of the current revision.")
 
+(defvar git-review-project nil "The name of the current project.")
+
 ;;;; Private
+
+(defvar git-review--patchset nil "The current patchset.")
 
 (defvar git-review--current-comment nil)
 (defvar git-review--reviews nil)
@@ -218,8 +227,8 @@ otherwise create it."
 
 (defun git-review-setup-project-file-review (file)
   "Setup `git-review' for project FILE review."
-  (setf (alist-get 'current-file git-review) file)
-  (let* ((default-directory (git-review--project-root))
+  (setf (alist-get 'current-file git-review--patchset) file)
+  (let* ((default-directory (project-root (project-current)))
          (file-info (git-review--file-info)))
     (git-review--setup-buffers)
     (let-alist file-info
@@ -232,7 +241,7 @@ otherwise create it."
                                           git-review-current-revision-buffer))
         (unless (string-equal "A" .type)
           (git-review--file-content (git-review--base-revision)
-                                      .base-filename
+                                      (or .original-filename .filename)
                                       git-review-base-revision-buffer))
         (unless (string-equal "D" .type)
           (git-review--file-content (git-review--current-revision)
@@ -253,7 +262,7 @@ otherwise create it."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (git-review--store-buffer-locations)
-    (git-review--remove-file-comment-overlays)
+    ;; (git-review--remove-file-comment-overlays)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -526,33 +535,28 @@ otherwise create it."
 (defun git-review-patchset ()
   "Review current patchset."
   (interactive)
-  (setq git-review-change (funcall git-review-determine-change-function))
-  (let* ((default-directory (project-root (project-current))))
-    (git-review--initialize-review (git-review--current-git-branch))
+  (let* ((default-directory (project-root (project-current)))
+         (git-review-change (funcall git-review-determine-change-function))
+         (git-review-patchset (funcall git-review-determine-patchset-function)))
+    (git-review--initialize-review)
     (git-review-start-review)))
 
-(defun git-review-branch-change-function ()
-  "Return change value."
-  (format "%s@%s"
-          (git-review--current-git-branch)
-          (project-root (project-current))))
-
-;;;###autoload
-(defun git-review-patchsets ()
-  "Review the difference between two patch-sets."
-  (interactive)
-  (unless git-review-change
-    (setq git-review-change
-          (format "%s@%s"
-                  (git-review--current-git-branch)
-                  (project-root (project-current)))))
-  (let* ((default-directory (project-root (project-current))))
-    (when-let ((base-revision (completing-read "Select base revision: "
-                                               (git-review--other-git-branches)))
-               (current-revision (git-review--current-git-branch)))
-      (git-review--initialize-review current-revision
-                                       base-revision)
-      (git-review-start-review))))
+;; ;;;###autoload
+;; (defun git-review-patchsets ()
+;;   "Review the difference between two patch-sets."
+;;   (interactive)
+;;   (unless git-review-change
+;;     (setq git-review-change
+;;           (format "%s@%s"
+;;                   (git-review--current-git-branch)
+;;                   (project-root (project-current)))))
+;;   (let* ((default-directory (project-root (project-current))))
+;;     (when-let ((base-revision (completing-read "Select base revision: "
+;;                                                (git-review--other-git-branches)))
+;;                (current-revision (git-review--current-git-branch)))
+;;       (git-review--initialize-review current-revision
+;;                                        base-revision)
+;;       (git-review-start-review))))
 
 (defun git-review-publish-review ()
   "Publish review."
@@ -646,7 +650,7 @@ otherwise create it."
 
 (defun git-review--switch-file (file)
   "Switch to FILE."
-  (setf (alist-get 'recent-file git-review) (git-review--current-file))
+  (setf (alist-get 'recent-file git-review--patchset) (git-review--current-file))
   (git-review-close-review-file)
   (git-review-setup-project-file-review file)
   (git-review-file))
@@ -657,13 +661,12 @@ otherwise create it."
 
 (defun git-review--current-revision ()
   "Return the current revision."
-  (let-alist git-review .current-revision))
+  (let-alist git-review--patchset .commit-hash))
 
 (defun git-review--base-revision ()
   "Return the base revision."
-  (let-alist git-review
-    (or .base-revision
-        (concat .current-revision "~1"))))
+  ;; TODO(Niklas Eklund, 20230127): Add support for other base patchset
+  (concat (git-review--current-revision) "~1"))
 
 (defun git-review--has-comments-p (file)
   "Return t if FILE has comments."
@@ -694,15 +697,15 @@ otherwise create it."
 
 (defun git-review--files ()
   "Return a list of review files."
-  (seq-map #'car (let-alist git-review .files)))
+  (seq-map #'car (let-alist git-review--patchset .files)))
 
 (defun git-review--current-file ()
   "Return the name of the current file being reviewed."
-  (let-alist git-review .current-file))
+  (let-alist git-review--patchset .current-file))
 
 (defun git-review--most-recent-file ()
   "Return the name of the most recently reviewed file."
-  (let-alist git-review .recent-file))
+  (let-alist git-review--patchset .recent-file))
 
 (defun git-review--progress ()
   "Return review progress."
@@ -715,7 +718,7 @@ otherwise create it."
 
 (defun git-review--file-info (&optional file)
   "Info about FILE."
-  (let-alist git-review
+  (let-alist git-review--patchset
     (let ((file (or file .current-file)))
       (alist-get file .files nil nil #'equal))))
 
@@ -766,22 +769,28 @@ Unless COMMENT is nil, then delete ID."
                                   (length))))))
     (setf (alist-get 'progress git-review) progress)))
 
-(defun git-review--initialize-review (current-revision &optional base-revision)
-  "Initialize review of CURRENT-REVISION.
+(defun git-review--initialize-review ()
+  "Initialize review of `gerrit-review-patchset'."
+  ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review
+  ;; (git-review--stored-review)
 
-If a BASE-REVISION is provided it indicates multiple patch-sets review."
-  (if-let ((review (git-review--stored-review current-revision base-revision)))
-      (setq git-review review)
-    (let ((multiple-patchsets (not (null base-revision))))
-      (setq git-review `((base-revision . ,base-revision)
-                           (current-revision . ,current-revision)
-                           (multiple-patchsets . ,multiple-patchsets)
-                           (project . ,default-directory)))
-      (git-review--add-files-to-review)
-      (when multiple-patchsets
-        (git-review--remove-rebased-files-from-review))
-      (git-review--add-metadata-to-files)
-      (git-review--add-ignore-tag-to-files))))
+  ;; TODO(Niklas Eklund, 20230127): Move to other location when a
+  ;; different patchset is selected. Or maybe it needs to be here in
+  ;; case a stored reviewed has a non-nil base-patchset
+
+  ;; (when multiple-patchsets
+  ;;   (git-review--remove-rebased-files-from-review))
+
+  (let ((commit-hash (with-temp-buffer
+                       (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
+                       (buffer-string))))
+    (setq git-review--patchset `((commit-hash . ,commit-hash))))
+  (git-review--add-files-to-patchset)
+
+  ;; TODO(Niklas Eklund, 20230127): Add back metadata tags
+  ;; (git-review--add-metadata-to-files)
+  ;; (git-review--add-ignore-tag-to-files)
+  )
 
 (defun git-review--add-ignore-tag-to-files ()
   "Add ignore tag to files that should be ignored in variable `git-review'."
@@ -797,32 +806,29 @@ If a BASE-REVISION is provided it indicates multiple patch-sets review."
               (git-review--update-file file 'metadata metadata)))
           (git-review--files)))
 
-(defun git-review--add-files-to-review ()
-  "Add files to variable `git-review'."
-  (let* ((files-in-latest-commit
-          `(,(format "%s COMMIT_MSG"
-                     (if (git-review--multiple-patchsets-p)
-                         "M" "A"))
-            ,@(split-string
-               (string-trim
-                (shell-command-to-string
-                 (format "git diff --name-status %s..%s"
-                         (git-review--base-revision)
-                         (git-review--current-revision))))
-               "\n"))))
-    (setf (alist-get 'files git-review)
-          (seq-map (lambda (it)
-                     (let ((elements (split-string it)))
-                       (pcase elements
-                         (`(,type ,filename)
-                          (cons filename `((current-filename . ,filename)
-                                           (base-filename . ,filename)
-                                           (type . ,type))))
-                         (`(,type ,base-filename ,filename)
-                          (cons filename `((current-filename . ,filename)
-                                           (base-filename . ,base-filename)
-                                           (type . ,type)))))))
-                   files-in-latest-commit))))
+(defun git-review--add-files-to-patchset ()
+  "Add files to variable `git-review-patchset'."
+  (let* ((files-in-patchset
+          (split-string
+           (string-trim
+            (shell-command-to-string
+             (format "git diff --name-status %s..%s"
+                     (git-review--base-revision)
+                     (git-review--current-revision))))
+           "\n"))
+         (files-info `(("COMMIT_MSG" . ((filename . "COMMIT_MSG")))
+                       ,@(seq-map (lambda (it)
+                                    (let ((elements (split-string it)))
+                                      (pcase elements
+                                        (`(,type ,filename)
+                                         (cons filename `((filename . ,filename)
+                                                          (type . ,type))))
+                                        (`(,type ,base-filename ,filename)
+                                         (cons filename `((filename . ,filename)
+                                                          (original-filename . ,base-filename)
+                                                          (type . ,type)))))))
+                                  files-in-patchset))))
+    (setf (alist-get 'files git-review--patchset) files-info)))
 
 (defun git-review--remove-rebased-files-from-review ()
   "Remove rebased files in variable `git-review'."
@@ -940,10 +946,10 @@ Optionally instruct function to SET-FILENAME."
     (let-alist file-info
       (setq git-review-base-revision-buffer
             (get-buffer-create (format "%s<%s>" (git-review--base-revision)
-                                       (file-name-nondirectory .base-filename))))
+                                       (file-name-nondirectory (or .original-filename .filename)))))
       (setq git-review-current-revision-buffer
             (get-buffer-create (format "%s<%s>" (git-review--current-revision)
-                                       (file-name-nondirectory (git-review--current-file))))))
+                                       (file-name-nondirectory .filename)))))
     (with-current-buffer git-review-base-revision-buffer
       (let ((inhibit-read-only t))
         (erase-buffer)))
@@ -1183,7 +1189,7 @@ in the database.  Plus storing them doesn't make sense."
 
 (defun git-review--next-file ()
   "Return next file."
-  (thread-last (let-alist git-review .files)
+  (thread-last (let-alist git-review--patchset .files)
                (seq-drop-while (lambda (it)
                                  (not (string= (car it)
                                                (git-review--current-file)))))
@@ -1195,7 +1201,7 @@ in the database.  Plus storing them doesn't make sense."
 
 (defun git-review--previous-file ()
   "Return previous file."
-  (thread-last (let-alist git-review .files)
+  (thread-last (let-alist git-review--patchset .files)
                (seq-take-while (lambda (it)
                                  (not (string= (car it)
                                                (git-review--current-file)))))
