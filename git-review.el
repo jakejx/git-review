@@ -668,7 +668,8 @@ otherwise create it."
 
 (defun git-review--switch-file (file)
   "Switch to FILE."
-  (setf (alist-get 'recent-file git-review--patchset) (git-review--current-file))
+  (setq git-review--patchset
+        (plist-put git-review--patchset :recent-file (git-review--current-file)))
   (git-review-close-review-file)
   (git-review-setup-project-file-review file)
   (git-review-file))
@@ -1237,31 +1238,28 @@ in the database.  Plus storing them doesn't make sense."
 
 (defun git-review--next-file ()
   "Return next file."
-  (thread-last (let-alist git-review--patchset .files)
+  (thread-last (plist-get git-review--patchset :files)
                (seq-drop-while (lambda (it)
-                                 (let-alist it
-                                   (not (string= .filename
-                                                 (git-review--current-file))))))
+                                 (not (string= (plist-get it :filename)
+                                               (git-review--current-file)))))
                (seq-rest)
                (seq-find (lambda (it)
-                           (let-alist it .filename
-                                      (not .ignore))))
+                           (not (plist-get it :ignore))))
                (funcall (lambda (it)
-                          (let-alist it .filename)))))
+                          (plist-get it :filename)))))
 
 (defun git-review--previous-file ()
   "Return previous file."
-  (thread-last (let-alist git-review--patchset .files)
+  (thread-last (plist-get git-review--patchset :files)
                (seq-take-while (lambda (it)
                                  (let-alist it
-                                   (not (string= .filename
+                                   (not (string= (plist-get it :filename)
                                                  (git-review--current-file))))))
                (nreverse)
                (seq-find (lambda (it)
-                           (let-alist it .filename
-                                      (not .ignore))))
+                           (not (plist-get it :ignore))))
                (funcall (lambda (it)
-                          (let-alist it .filename)))))
+                          (plist-get it :filename)))))
 
 (defun git-review--next-comment ()
   "Return next comment."
