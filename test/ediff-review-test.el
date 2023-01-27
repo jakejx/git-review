@@ -1,4 +1,4 @@
-;;; ediff-review-test.el --- Tests for ediff-review.el -*- lexical-binding: t; -*-
+;;; git-review-test.el --- Tests for git-review.el -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022-2023 Niklas Eklund
 
@@ -17,50 +17,50 @@
 
 ;;; Commentary:
 
-;; Tests for `ediff-review'.
+;; Tests for `git-review'.
 
 ;;; Code:
 
 ;;;; Requirements
 
 (require 'ert)
-(require 'ediff-review)
+(require 'git-review)
 
-(ert-deftest ediff-review-test-test-differences-intersect-p ()
-  (should (ediff-review--differences-intersect-p
+(ert-deftest git-review-test-test-differences-intersect-p ()
+  (should (git-review--differences-intersect-p
            '((:begin 110 :end 111)
              (:begin 138 :end 140))
            '((:begin 112 :end 114)
              (:begin 139 :end 141))))
 
-  (should (ediff-review--differences-intersect-p
+  (should (git-review--differences-intersect-p
            '((:begin 3 :end 8))
            '((:begin 1 :end 2)
              (:begin 5 :end 6))))
 
-  (should (not (ediff-review--differences-intersect-p
+  (should (not (git-review--differences-intersect-p
                 '((:begin 18 :end 33))
                 '((:begin 34 :end 40))))))
 
-(ert-deftest ediff-review-test-ignore-file-p ()
-  (let ((ediff-review-ignore-file-predicates
+(ert-deftest git-review-test-ignore-file-p ()
+  (let ((git-review-ignore-file-predicates
          '((lambda (file)
              (string-match "ba" file)))))
-    (should (not (ediff-review--ignore-file-p "foo")))
-    (should (ediff-review--ignore-file-p "bar"))
-    (should (ediff-review--ignore-file-p "baz"))))
+    (should (not (git-review--ignore-file-p "foo")))
+    (should (git-review--ignore-file-p "bar"))
+    (should (git-review--ignore-file-p "baz"))))
 
-(ert-deftest ediff-review-test-file-metadata ()
-  (let ((ediff-review-metadata-functions
+(ert-deftest git-review-test-file-metadata ()
+  (let ((git-review-metadata-functions
          '((lambda (file)
              (when (string-match "bar" file)
                `(old . t)))
            (lambda (file)
              (when (string-match "foo" file)
                `(new . t))))))
-    (should (equal (ediff-review--file-metadata "foo") '((new . t))))
-    (should (equal (ediff-review--file-metadata "bar") '((old . t))))))
+    (should (equal (git-review--file-metadata "foo") '((new . t))))
+    (should (equal (git-review--file-metadata "bar") '((old . t))))))
 
-(provide 'ediff-review-test)
+(provide 'git-review-test)
 
-;;; ediff-review-test.el ends here
+;;; git-review-test.el ends here

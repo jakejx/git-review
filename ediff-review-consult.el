@@ -1,4 +1,4 @@
-;;; ediff-review-consult.el --- Ediff-Review integration with Consult -*- lexical-binding: t -*-
+;;; git-review-consult.el --- Git-Review integration with Consult -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2023 Niklas Eklund
 
@@ -19,13 +19,13 @@
 
 ;;; Commentary:
 
-;; This package integrates `ediff-review' with `consult'.
+;; This package integrates `git-review' with `consult'.
 
 ;;; Code:
 
 ;;;; Requirements
 
-(require 'ediff-review)
+(require 'git-review)
 
 (declare-function consult--multi "consult")
 
@@ -33,104 +33,104 @@
 
 ;;;; Variables
 
-(defcustom ediff-review-file-consult-sources
-  '(ediff-review-consult--source-files
-    ediff-review-consult--source-ignored
-    ediff-review-consult--source-comments
-    ediff-review-consult--source-unreviewed)
-  "Sources used by `ediff-review-consult-file'.
+(defcustom git-review-file-consult-sources
+  '(git-review-consult--source-files
+    git-review-consult--source-ignored
+    git-review-consult--source-comments
+    git-review-consult--source-unreviewed)
+  "Sources used by `git-review-consult-file'.
 
 See `consult-multi' for a description of the source values."
   :type '(repeat symbol)
-  :group 'ediff-review)
+  :group 'git-review)
 
-(defvar ediff-review-consult--source-files
-  `(:category ediff-review-file
-              :annotate ediff-review--annotation-function
-              :action ediff-review-consult--decode-file-candidate
+(defvar git-review-consult--source-files
+  `(:category git-review-file
+              :annotate git-review--annotation-function
+              :action git-review-consult--decode-file-candidate
               :items
               ,(lambda ()
-                 (thread-last ediff-review--candidates
-                              (seq-remove #'ediff-review-consult--ignore-file-p)
+                 (thread-last git-review--candidates
+                              (seq-remove #'git-review-consult--ignore-file-p)
                               (seq-map #'car))))
-  "All `ediff-review' files as a source for `consult'.")
+  "All `git-review' files as a source for `consult'.")
 
-(defvar ediff-review-consult--source-ignored
+(defvar git-review-consult--source-ignored
   `(:narrow (?i . "Ignored")
             :hidden t
-            :category ediff-review-file
-            :annotate ediff-review--annotation-function
-            :action ediff-review-consult--decode-file-candidate
+            :category git-review-file
+            :annotate git-review--annotation-function
+            :action git-review-consult--decode-file-candidate
             :items
             ,(lambda ()
-               (thread-last ediff-review--candidates
-                            (seq-filter #'ediff-review-consult--ignore-file-p)
+               (thread-last git-review--candidates
+                            (seq-filter #'git-review-consult--ignore-file-p)
                             (seq-map #'car))))
-  "All `ediff-review' files as a source for `consult'.")
+  "All `git-review' files as a source for `consult'.")
 
-(defvar ediff-review-consult--source-unreviewed
+(defvar git-review-consult--source-unreviewed
   `(:narrow (?u . "Unreviewed")
             :hidden t
-            :category ediff-review-file
-            :annotate ediff-review--annotation-function
-            :action ediff-review-consult--decode-file-candidate
+            :category git-review-file
+            :annotate git-review--annotation-function
+            :action git-review-consult--decode-file-candidate
             :items
             ,(lambda ()
-               (thread-last ediff-review--candidates
-                            (seq-remove #'ediff-review-consult--ignore-file-p)
+               (thread-last git-review--candidates
+                            (seq-remove #'git-review-consult--ignore-file-p)
                             (seq-remove
                              (lambda (x)
                                (let-alist (cdr x) .reviewed)))
                             (seq-map #'car))))
-  "All unreviewed `ediff-review' files as a source for `consult'.")
+  "All unreviewed `git-review' files as a source for `consult'.")
 
-(defvar ediff-review-consult--source-comments
+(defvar git-review-consult--source-comments
   `(:narrow (?c . "Comments")
             :hidden t
-            :category ediff-review-file
-            :annotate ediff-review--annotation-function
-            :action ediff-review-consult--decode-file-candidate
+            :category git-review-file
+            :annotate git-review--annotation-function
+            :action git-review-consult--decode-file-candidate
             :items
             ,(lambda ()
-               (thread-last ediff-review--candidates
-                            (seq-remove #'ediff-review-consult--ignore-file-p)
+               (thread-last git-review--candidates
+                            (seq-remove #'git-review-consult--ignore-file-p)
                             (seq-filter
                              (lambda (x)
                                (let-alist (cdr x) .comments)))
                             (seq-map #'car))))
-  "All `ediff-review' files with comments as a source for `consult'.")
+  "All `git-review' files with comments as a source for `consult'.")
 
 ;;;; Functions
 
 ;;;; Commands
 
 ;;;###autoload
-(defun ediff-review-consult-file ()
-  "Enhanced `ediff-review-select-file' command."
+(defun git-review-consult-file ()
+  "Enhanced `git-review-select-file' command."
   (interactive)
   (unless (require 'consult nil 'noerror)
-    (error "Install Consult to use `ediff-review-consult-files'"))
-  (let* ((ediff-review--candidates (seq-map (lambda (file)
-                                              `(,file . ,(ediff-review--file-info file)))
-                                            (ediff-review--files)))
-         (ediff-review--annotation-config ediff-review-file-annotation)
-         (ediff-review--annotations (ediff-review--annotations ediff-review--candidates))
-         (ediff-review--annotation-widths (ediff-review--annotation-widths)))
-    (consult--multi ediff-review-file-consult-sources
+    (error "Install Consult to use `git-review-consult-files'"))
+  (let* ((git-review--candidates (seq-map (lambda (file)
+                                              `(,file . ,(git-review--file-info file)))
+                                            (git-review--files)))
+         (git-review--annotation-config git-review-file-annotation)
+         (git-review--annotations (git-review--annotations git-review--candidates))
+         (git-review--annotation-widths (git-review--annotation-widths)))
+    (consult--multi git-review-file-consult-sources
                     :prompt "Select file: "
                     :require-match t
                     :sort nil)))
 
 ;;;; Support functions
 
-(defun ediff-review-consult--ignore-file-p (file)
+(defun git-review-consult--ignore-file-p (file)
   "Return t if FILE should be ignored."
   (let-alist file .ignore))
 
-(defun ediff-review-consult--decode-file-candidate (candidate)
+(defun git-review-consult--decode-file-candidate (candidate)
   "Return change matching CANDIDATE."
-  (ediff-review--switch-file candidate))
+  (git-review--switch-file candidate))
 
-(provide 'ediff-review-consult)
+(provide 'git-review-consult)
 
-;;; ediff-review-consult.el ends here
+;;; git-review-consult.el ends here
