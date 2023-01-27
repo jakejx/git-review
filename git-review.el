@@ -350,6 +350,7 @@ otherwise create it."
       (progn
         (make-frame-invisible git-review--conversation-frame t)
         (kill-buffer "*git-review-conversation*"))
+    ;; TODO: Rewrite to operate on conversations
     (when-let ((comment (git-review--comment-at-point)))
       (let* ((parent-frame (window-frame))
              (child-frame (make-frame
