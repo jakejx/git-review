@@ -411,21 +411,23 @@ otherwise create it."
   (tab-bar-close-tab))
 
 (defun git-review-next-comment ()
-  "Go to next comment."
+  "Go to next conversation."
   (interactive)
-  (if-let ((comment (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+  (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
                       (save-excursion
                         (git-review--next-comment)))))
       (progn
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist comment  .location.start-point)))
+          (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (save-excursion
           (with-selected-window (git-review--control-window)
             (let ((last-command-event ?b))
               (ediff-jump-to-difference-at-point nil))
             (git-review---maybe-modify-overlays)))
+        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+          (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
     (message "No next comment found")))
@@ -433,19 +435,21 @@ otherwise create it."
 (defun git-review-previous-comment ()
   "Go to previous comment."
   (interactive)
-  (if-let ((comment (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-                      (save-excursion
-                        (git-review--previous-comment)))))
+  (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+                           (save-excursion
+                             (git-review--previous-comment)))))
       (progn
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist comment  .location.start-point)))
+          (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (save-excursion
           (with-selected-window (git-review--control-window)
             (let ((last-command-event ?b))
               (ediff-jump-to-difference-at-point nil))
             (git-review---maybe-modify-overlays)))
+        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+          (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
     (message "No previous comment found")))
@@ -1277,24 +1281,28 @@ in the database.  Plus storing them doesn't make sense."
                           (plist-get it :filename)))))
 
 (defun git-review--next-comment ()
-  "Return next comment."
-  (when-let* ((comments (let-alist (git-review--file-info) .comments))
-              (next-comment-id (thread-last comments
-                                            (seq-map (lambda (it) (let-alist (cdr it) (cons (- .location.start-point (point)) .id))))
-                                            (seq-sort-by (lambda (it) (car it)) #'<)
-                                            (seq-find (lambda (it) (> (car it) 0)))
-                                            (cdr))))
-    (alist-get next-comment-id comments)))
+  "Return next conversation."
+  (thread-last git-review--conversations
+               (seq-filter (lambda (it)
+                           (equal (plist-get it :filename) (git-review--current-file))))
+               (seq-map (lambda (it)
+                          (let ((location (plist-get it :location)))
+                            (let-alist location (cons (- .start-point (point)) it)))))
+               (seq-sort-by (lambda (it) (car it)) #'<)
+               (seq-find (lambda (it) (> (car it) 0)))
+               (cdr)))
 
 (defun git-review--previous-comment ()
   "Return previous comment."
-  (when-let* ((comments (let-alist (git-review--file-info) .comments))
-              (previous-comment-id (thread-last comments
-                                            (seq-map (lambda (it) (let-alist (cdr it) (cons (- .location.start-point (point)) .id))))
-                                            (seq-sort-by (lambda (it) (car it)) #'<)
-                                            (seq-find (lambda (it) (< (car it) 0)))
-                                            (cdr))))
-    (alist-get previous-comment-id comments)))
+  (thread-last git-review--conversations
+               (seq-filter (lambda (it)
+                           (equal (plist-get it :filename) (git-review--current-file))))
+               (seq-map (lambda (it)
+                          (let ((location (plist-get it :location)))
+                            (let-alist location (cons (- .start-point (point)) it)))))
+               (seq-sort-by (lambda (it) (car it)) #'<)
+               (seq-find (lambda (it) (< (car it) 0)))
+               (cdr)))
 
 (defun git-review--annotations (candidates)
   "Return annotations of CANDIDATES."
