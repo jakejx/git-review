@@ -410,12 +410,12 @@ otherwise create it."
   (setq git-review--patchset nil)
   (tab-bar-close-tab))
 
-(defun git-review-next-comment ()
+(defun git-review-next-conversation ()
   "Go to next conversation."
   (interactive)
   (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
                       (save-excursion
-                        (git-review--next-comment)))))
+                        (git-review--next-conversation)))))
       (progn
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
@@ -430,14 +430,14 @@ otherwise create it."
           (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
-    (message "No next comment found")))
+    (message "No next conversation found")))
 
-(defun git-review-previous-comment ()
-  "Go to previous comment."
+(defun git-review-previous-conversation ()
+  "Go to previous conversation."
   (interactive)
   (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
                            (save-excursion
-                             (git-review--previous-comment)))))
+                             (git-review--previous-conversation)))))
       (progn
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
@@ -452,7 +452,7 @@ otherwise create it."
           (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
-    (message "No previous comment found")))
+    (message "No next conversation found")))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
@@ -1165,24 +1165,6 @@ Optionally instruct function to SET-FILENAME."
       :location ,location
       :side ,side)))
 
-(defun git-review--create-comment ()
-  "Create a new comment and return it."
-  (let* ((id (intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))
-         (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b))
-         (start-position (min (mark) (point)))
-         (end-position (max (mark) (point)))
-         (location
-          `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
-            (start-column . ,(save-excursion (goto-char start-position) (current-column)))
-            (start-point . ,start-position)
-            (end-line . ,(save-excursion (goto-char end-position) (current-line)))
-            (end-column . ,(save-excursion (goto-char end-position) (current-column)))
-            (end-point . ,end-position))))
-    `((id . ,id)
-      (draft . t)
-      (side . ,side)
-      (location . ,location))))
-
 (defun git-review--remove-file-comment-overlays ()
   "Remove all overlays in the comments.
 
@@ -1280,7 +1262,7 @@ in the database.  Plus storing them doesn't make sense."
                (funcall (lambda (it)
                           (plist-get it :filename)))))
 
-(defun git-review--next-comment ()
+(defun git-review--next-conversation ()
   "Return next conversation."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
@@ -1292,7 +1274,7 @@ in the database.  Plus storing them doesn't make sense."
                (seq-find (lambda (it) (> (car it) 0)))
                (cdr)))
 
-(defun git-review--previous-comment ()
+(defun git-review--previous-conversation ()
   "Return previous comment."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
@@ -1394,9 +1376,9 @@ in the database.  Plus storing them doesn't make sense."
     (define-key map (kbd "q") #'git-review-quit)
     (define-key map (kbd "S") #'git-review-publish-review)
     (define-key map (kbd "n") #'git-review-next-hunk)
-    (define-key map (kbd "N") #'git-review-next-comment)
+    (define-key map (kbd "N") #'git-review-next-conversation)
     (define-key map (kbd "p") #'git-review-previous-hunk)
-    (define-key map (kbd "P") #'git-review-previous-comment)
+    (define-key map (kbd "P") #'git-review-previous-conversation)
     (define-key map (kbd "]") #'git-review-next-file)
     (define-key map (kbd "[") #'git-review-previous-file)
     (define-key map (kbd "^") #'git-review-switch-to-most-recent-file)
