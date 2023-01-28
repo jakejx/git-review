@@ -262,7 +262,6 @@ otherwise create it."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
     (git-review--store-buffer-locations)
-    ;; (git-review--remove-file-comment-overlays)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -632,6 +631,7 @@ otherwise create it."
 (defun git-review-kill-comment ()
   "Kill comment at point."
   (interactive)
+  ;; TODO: Rewrite this code
   (when-let ((comment
               (let-alist (git-review--file-info)
                 (thread-last .comments
@@ -639,10 +639,10 @@ otherwise create it."
                                          (let-alist it
                                            (<= .location.start-point (point) .location.end-point))))
                              (cdr)))))
+    ;; TODO: Update this, need to find the overlays in buffer
     (let-alist comment
       (delete-overlay .header-overlay)
-      (delete-overlay .comment-overlay)
-      (git-review--update-comments .id))))
+      (delete-overlay .comment-overlay))))
 
 (defun git-review-complete-comment ()
   "Complete the review comment."
@@ -752,21 +752,6 @@ otherwise create it."
   (let* ((files (let-alist git-review .files))
          (file-info (alist-get file files nil nil #'equal)))
     (setf (alist-get key file-info) value)
-    (setf (alist-get file files nil nil #'equal) file-info)
-    (setf (alist-get 'files git-review) files)))
-
-(defun git-review--update-comments (id &optional comment)
-  "Update list of file comments with ID to COMMENT.
-
-Unless COMMENT is nil, then delete ID."
-  (let* ((file (let-alist git-review .current-file))
-         (files (let-alist git-review .files))
-         (file-info (alist-get file files nil nil #'equal))
-         (comments (alist-get 'comments file-info)))
-    (if comment
-        (setf (alist-get id comments) comment)
-      (setf comments (assoc-delete-all id comments)))
-    (setf (alist-get 'comments file-info) comments)
     (setf (alist-get file files nil nil #'equal) file-info)
     (setf (alist-get 'files git-review) files)))
 
@@ -1165,19 +1150,6 @@ Optionally instruct function to SET-FILENAME."
       :location ,location
       :side ,side)))
 
-(defun git-review--remove-file-comment-overlays ()
-  "Remove all overlays in the comments.
-
-This is required since we can't serialize the overlays and store them
-in the database.  Plus storing them doesn't make sense."
-  (let* ((comments (let-alist (git-review--file-info) .comments)))
-    (seq-do (lambda (it)
-              (pcase-let ((`(,id . ,comment) it))
-                (setf comment (assoc-delete-all 'header-overlay comment))
-                (setf comment (assoc-delete-all 'comment-overlay comment))
-                (git-review--update-comments id comment)))
-            comments)))
-
 (defun git-review--add-comment-overlay ()
   "Add a comment overlay."
   (let* ((side (plist-get git-review--current-conversation :side)))
@@ -1236,7 +1208,6 @@ in the database.  Plus storing them doesn't make sense."
                                                                         (seq-reverse)
                                                                         (seq-first)))
                          (git-review--add-comment-overlay)
-                         ;; (git-review--update-comments .id git-review--current-comment)
                          (setq git-review--current-conversation nil)
                          (setq git-review--current-comment nil)))))
 
