@@ -350,8 +350,8 @@ otherwise create it."
       (progn
         (make-frame-invisible git-review--conversation-frame t)
         (kill-buffer "*git-review-conversation*"))
-    ;; TODO: Rewrite to operate on conversations
-    (when-let ((comment (git-review--comment-at-point)))
+    (when-let* ((conversation (git-review--conversation-at-point))
+                (comment (seq-first (plist-get conversation :comments))))
       (let* ((parent-frame (window-frame))
              (child-frame (make-frame
                            `((parent-frame . ,parent-frame)
@@ -371,24 +371,24 @@ otherwise create it."
           (let ((inhibit-read-only t))
             (erase-buffer)
             (git-review-conversation-mode)
-            (let-alist comment
-              (insert (propertize (format "%s:\n" git-review-user) 'face 'org-block-begin-line))
-              (insert (with-temp-buffer
-                        (insert .message)
-                        (gfm-view-mode)
-                        (font-lock-ensure)
-                        (buffer-substring (point-min) (point-max)))))
+            (insert (propertize (format "%s:\n" (plist-get comment :user)) 'face 'org-block-begin-line))
+            (insert (with-temp-buffer
+                      (insert (plist-get comment :message))
+                      (gfm-view-mode)
+                      (font-lock-ensure)
+                      (buffer-substring (point-min) (point-max))))
             (goto-char (point-min)))
           (setq line-count (count-lines (point-min) (point-max) 'ignore-invisible-lines)))
         (set-window-buffer window buffer)
         (set-window-dedicated-p window t)
-        (git-review--conversation-frame-configure-size child-frame comment line-count)
+        (git-review--conversation-frame-configure-size child-frame conversation line-count)
         (make-frame-visible child-frame)))))
 
-(defun git-review--conversation-frame-configure-size (frame comment line-count)
-  "Configure size of FRAME using info from COMMENT and LINE-COUNT."
+(defun git-review--conversation-frame-configure-size (frame conversation line-count)
+  "Configure size of FRAME using info from CONVERSATION and LINE-COUNT."
   (save-excursion
-    (let-alist comment (goto-char (overlay-start .header-overlay)))
+    ;; TODO: Improve location, search for correct header overlay instead
+    (goto-char (let-alist (plist-get conversation :location) .start-point))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
                  (frame-width (* (window-font-width) 120))
