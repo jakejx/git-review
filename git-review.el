@@ -666,7 +666,9 @@ otherwise create it."
 (defun git-review-quit-comment ()
   "Quit review comment."
   (interactive)
+  ;; TODO: Replace these with buffer local variables so that this is not necessary
   (setq git-review--current-conversation nil)
+  (setq git-review--current-comment nil)
   (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 ;;;; Support functions
@@ -681,6 +683,7 @@ otherwise create it."
 
 (defun git-review--project-root ()
   "Return the project root of the current review."
+  ;; TODO: Don't rely on this but rather project.el
   (let-alist git-review .project))
 
 (defun git-review--current-revision ()
