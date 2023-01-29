@@ -108,6 +108,28 @@ Updating an existing change with =pushnew= doesn't work.
 | :id | 1 | :name | niklas |
 | :id | 2 | :name | tira   |
 
+Updating an existing change with =push= and =seq-remove=.
+
+#+begin_src elisp
+  (let ((changes '((:id 1 :name "niklas")
+                   (:id 2 :name "tira")))
+        (change '(:id 1 :name "katarina")))
+    ;; Delete existing change
+    (setq changes
+          (seq-remove (lambda (it)
+                        (equal (plist-get it :id)
+                               (plist-get change :id)))
+                      changes))
+    ;; Add updated change
+    (push change changes)
+    changes)
+
+#+end_src
+
+#+RESULTS:
+| :id | 1 | :name | katarina |
+| :id | 2 | :name | tira     |
+
 ** Workflows
 
 - Opening patchset3 of a change. The review should contain remote comments if there are any. The user should be able to switch the base patchset which by default is nil and replace it with patchset2. This should alter which files are being list. It should also update the progress given that the number of interesting files could have changed. If the current file is still of interest it should be kept as the currently viewed file, otherwise it should switch to commit message. When the base change it will alter which comments that gets displayed. It will also alter the files that are being tagged as unchanged or rebased.
