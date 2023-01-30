@@ -252,7 +252,7 @@ otherwise create it."
   "Review current file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (git-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory (git-review--project-root)))
+             (default-directory (project-root (project-current))))
     (ediff-buffers git-review-base-revision-buffer git-review-current-revision-buffer)
     (git-review--init-conversation-overlays)
     (git-review--restore-buffer-location)))
@@ -683,11 +683,6 @@ otherwise create it."
   (git-review-setup-project-file-review file)
   (git-review-file))
 
-(defun git-review--project-root ()
-  "Return the project root of the current review."
-  ;; TODO: Don't rely on this but rather project.el
-  (let-alist git-review .project))
-
 (defun git-review--current-revision ()
   "Return the current revision."
   (plist-get git-review--patchset :commit-hash))
@@ -928,9 +923,11 @@ Optionally instruct function to SET-FILENAME."
       (call-process-shell-command
        (format "git show %s:%s" revision file) nil t)
       (setq-local default-directory
-                  (file-name-directory (expand-file-name file (git-review--project-root))))
+                  (file-name-directory
+                   (expand-file-name file (project-root (project-current)))))
       (when set-filename
-        (setq-local buffer-file-name (expand-file-name file (git-review--project-root))))
+        (setq-local buffer-file-name
+                    (expand-file-name file (project-root (project-current)))))
       (git-review---enable-mode))
     (read-only-mode)))
 
@@ -1140,8 +1137,6 @@ Optionally instruct function to SET-FILENAME."
   "Create a conversation."
   (let* ((start-position (min (mark) (point)))
          (end-position (max (mark) (point)))
-         ;; TODO(Niklas Eklund, 20230130): Remove dependency to start
-         ;; and end position because remote comments don't have that
          (location
           `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
             (start-column . ,(save-excursion (goto-char start-position) (current-column)))
