@@ -565,8 +565,10 @@ otherwise create it."
   "Submit review comments."
   (interactive)
   (if (functionp git-review-submit-function)
-      (setq git-review--conversations
-            (funcall git-review-submit-function git-review--conversations))
+      (progn
+        (setq git-review--conversations
+              (funcall git-review-submit-function git-review--conversations))
+        (git-review-quit))
     (message "No submit function defined")))
 
 (defun git-review-jump-to-a ()
