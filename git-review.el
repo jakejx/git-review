@@ -54,12 +54,17 @@
   :type 'symbol
   :group 'git-review)
 
-(defcustom git-review-determine-change-function nil
+(defcustom git-review-determine-change-function
+  (lambda ()
+    (with-temp-buffer
+      (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
+      (buffer-string)))
   "A function that returns a change value."
   :type 'symbol
   :group 'git-review)
 
-(defcustom git-review-determine-patchset-function nil
+(defcustom git-review-determine-patchset-function (lambda ()
+                                                    1)
   "A function that returns a patchset value."
   :type 'symbol
   :group 'git-review)
@@ -127,9 +132,10 @@ Each entry in the list is a property list with the following properties:
 
 ;;;; Private
 
+(defvar git-review--changes nil "List of changes.")
+(defvar git-review--change nil "The current change.")
 (defvar git-review--patchset nil "The current patchset.")
 (defvar git-review--conversations nil "List of conversations.")
-(defvar git-review--changes nil "List of changes.")
 
 (defvar-local git-review--current-comment nil)
 (defvar-local git-review--current-conversation nil)
@@ -772,12 +778,12 @@ Each entry in the list is a property list with the following properties:
 
     (git-review--restore-review git-review-change git-review-patchset)
 
-    (unless git-review-change
+    (unless git-review--change
       (setq git-review--change `(:id ,git-review-change
                                      :current-patchset ,git-review-patchset))
       (setq git-review--conversations nil))
 
-    (unless git-review-patchset
+    (unless git-review--patchset
       (let* ((commit-hash (with-temp-buffer
                             (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
                             (buffer-string)))
