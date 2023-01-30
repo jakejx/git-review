@@ -1210,16 +1210,13 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--restore-comment-overlays ()
   "Restore comment overlays in the current file."
-  (thread-last git-review--conversations
-               (seq-filter (lambda (it) (equal (plist-get it :filename) (git-review--current-file))))
-               (seq-do (lambda (it)
-                         (setq git-review--current-conversation it)
-                         (setq git-review--current-comment (thread-last (plist-get it :comments)
-                                                                        (seq-reverse)
-                                                                        (seq-first)))
-                         (git-review--add-comment-overlay it)
-                         (setq git-review--current-conversation nil)
-                         (setq git-review--current-comment nil)))))
+  (let* ((file-conversations
+          (seq-filter (lambda (it)
+                        (equal (plist-get it :filename) (git-review--current-file)))
+                      git-review--conversations)))
+    (seq-do (lambda (conversation)
+              (git-review--add-comment-overlay conversation))
+            file-conversations)))
 
 (defun git-review--next-file ()
   "Return next file."
@@ -1366,7 +1363,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "^") #'git-review-switch-to-most-recent-file)
     map))
 
-(define-derived-mode git-review-mode fundamental-mode "Ediff Review"
+(define-derived-mode git-review-mode fundamental-mode "Git Review"
   (read-only-mode)
   (rename-buffer
    (git-review--review-buffer-name)))
@@ -1376,7 +1373,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "<tab>") #'git-review-toggle-conversation)
     map))
 
-(define-derived-mode git-review-conversation-mode fundamental-mode "Ediff Review Conversation"
+(define-derived-mode git-review-conversation-mode fundamental-mode "Git Review Conversation"
   (setq-local mode-line-format nil)
   (read-only-mode))
 
@@ -1385,7 +1382,7 @@ Optionally instruct function to SET-FILENAME."
 (define-minor-mode git-review-comment-mode
   "Mode for `git-review' comment."
   :global nil
-  :lighter " Ediff Review Comment"
+  :lighter " Git Review Comment"
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c C-c") #'git-review-complete-comment)
             (define-key map (kbd "C-c C-k") #'git-review-quit-comment)
@@ -1394,7 +1391,7 @@ Optionally instruct function to SET-FILENAME."
 (define-minor-mode git-review-minor-mode
   "Minor mode for `git-review'."
   :global nil
-  :lighter "Ediff Review"
+  :lighter "Git Review"
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c C-c") #'git-review-jump-to-control)
             (define-key map (kbd "C-c C-'") #'git-review-conversation-dwim)
