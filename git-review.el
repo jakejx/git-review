@@ -844,6 +844,7 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--add-ignore-tag-to-files ()
   "Add ignore tag to files that should be ignored in variable `git-review'."
+  ;; TODO: Make it work
   (seq-do (lambda (file)
             (when (git-review--ignore-file-p file)
               (git-review--update-file file 'ignore t)))
@@ -851,6 +852,7 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--add-metadata-to-files ()
   "Add metadata to files in variable `git-review'."
+  ;; TODO: Make it work
   (seq-do (lambda (file)
             (when-let ((metadata (git-review--file-metadata file)))
               (git-review--update-file file 'metadata metadata)))
