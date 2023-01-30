@@ -64,8 +64,8 @@
   :type 'symbol
   :group 'git-review)
 
-(defcustom git-review-publish-function nil
-  "Function that can publish a review."
+(defcustom git-review-submit-function nil
+  "Function that can submit a review."
   :type 'symbol
   :group 'git-review)
 
@@ -561,15 +561,13 @@ otherwise create it."
 ;;                                        base-revision)
 ;;       (git-review-start-review))))
 
-(defun git-review-publish-review ()
-  "Publish review."
+(defun git-review-submit-comments ()
+  "Submit review comments."
   (interactive)
-  (if (functionp git-review-publish-function)
-      (progn
-        ;; TODO: For each comment set published if not already set, and if
-        ;; so add a timestamp
-        (funcall git-review-publish-function git-review))
-    (message "No publish function definied")))
+  (if (functionp git-review-submit-function)
+      (setq git-review--conversations
+            (funcall git-review-submit-function git-review--conversations))
+    (message "No submit function defined")))
 
 (defun git-review-jump-to-a ()
   "Jump to base revision buffer."
@@ -1351,7 +1349,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'git-review-quit)
-    (define-key map (kbd "S") #'git-review-publish-review)
+    (define-key map (kbd "S") #'git-review-submit-comments)
     (define-key map (kbd "n") #'git-review-next-hunk)
     (define-key map (kbd "N") #'git-review-next-conversation)
     (define-key map (kbd "p") #'git-review-previous-hunk)
