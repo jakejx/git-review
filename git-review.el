@@ -182,13 +182,14 @@ Each entry in the list is a property list with the following properties:
       (prin1 git-review--changes (current-buffer)))))
 
 (defun git-review--update-review ()
-  "Update changes with change."
+  "Update change(s) with change."
   (setq git-review--change (plist-put git-review--change :conversations git-review--conversations))
   (setq git-review--change (plist-put git-review--change :patchsets git-review--patchset))
   (setq git-review--changes
         (append (seq-remove (lambda (it)
                               (equal (plist-get it :id)
-                                     (plist-get git-review--change :id))))
+                                     (plist-get git-review--change :id)))
+                            git-review--changes)
                 `(,git-review--change)))
   (git-review-update-db))
 
