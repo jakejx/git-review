@@ -451,7 +451,7 @@ otherwise create it."
           (goto-char (let-alist (plist-get conversation :location) .start-point)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
-    (message "No next conversation found")))
+    (message "No previous conversation found")))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
@@ -628,40 +628,26 @@ otherwise create it."
       (select-window (get-buffer-window (current-buffer)))
       (goto-char (point-max)))))
 
-(defun git-review-kill-comment ()
-  "Kill comment at point."
-  (interactive)
-  ;; TODO: Rewrite this code
-  (when-let ((comment
-              (let-alist (git-review--file-info)
-                (thread-last .comments
-                             (seq-find (lambda (it)
-                                         (let-alist it
-                                           (<= .location.start-point (point) .location.end-point))))
-                             (cdr)))))
-    ;; TODO: Update this, need to find the overlays in buffer
-    (let-alist comment
-      (delete-overlay .header-overlay)
-      (delete-overlay .comment-overlay))))
-
 (defun git-review-complete-comment ()
   "Complete the review comment."
   (interactive)
-  (setq git-review--current-comment
-        (plist-put git-review--current-comment :message
-                   (buffer-substring-no-properties (point-min) (point-max))))
-  ;; TODO(Niklas Eklund, 20230127): If comment is updated we cannot
-  ;; push it in like this. There needs to be a proper update
-  (setq git-review--current-conversation
-        (plist-put git-review--current-conversation :comments
-                   (append `(,git-review--current-comment) (plist-get git-review--current-conversation :comments))))
-  (push git-review--current-conversation
-        git-review--conversations)
-
-  (git-review--add-comment-overlay)
+  (let* ((comment (plist-put git-review--current-comment :message
+                             (buffer-substring-no-properties (point-min) (point-max))))
+         (conversation (git-review--update-conversation-comment git-review--current-conversation
+                                                                comment)))
+    (git-review--update-conversations conversation)
+    (git-review--add-comment-overlay conversation))
   (setq git-review--current-comment nil)
   (setq git-review--current-conversation nil)
   (quit-restore-window))
+
+(defun git-review-kill-comment ()
+  "Kill comment at point."
+  (interactive)
+  (when-let* ((conversation (git-review--conversation-at-point)))
+    (seq-do (lambda (overlay)
+              (delete-overlay overlay))
+            (git-review--conversation-overlays conversation))))
 
 (defun git-review-quit-comment ()
   "Quit review comment."
@@ -672,6 +658,31 @@ otherwise create it."
   (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 ;;;; Support functions
+
+(defun git-review--update-conversation-comment (conversation comment)
+  "Update CONVERSATION with COMMENT."
+  (plist-put conversation :comments
+             (append (seq-remove (lambda (it)
+                                   (equal (plist-get it :id) (plist-get comment :id)))
+                                 (plist-get conversation :comments))
+                     `(,comment))))
+
+(defun git-review--update-conversations (conversation)
+  "Update conversations with CONVERSATION."
+  (setq git-review--conversations
+        (append (seq-remove (lambda (it)
+                              (equal (plist-get it :id) (plist-get conversation :id)))
+                            (plist-get conversation :comments))
+                `(,conversation))))
+
+(defun git-review--conversation-overlays (conversation)
+  "Return overlays associated with CONVERSATION."
+  (when-let* ((conversation-id (plist-get conversation :id))
+              (buffer-overlays (overlays-in (point-min) (point-max))))
+    (seq-filter (lambda (overlay)
+                (equal (overlay-get overlay 'git-review-conversation-id)
+                       conversation-id))
+              buffer-overlays)))
 
 (defun git-review--switch-file (file)
   "Switch to FILE."
@@ -825,8 +836,7 @@ otherwise create it."
              (format "git diff --name-status %s..%s"
                      (concat commit-hash "~1")
                      commit-hash)))
-           "\n"))
-         (files-info ))
+           "\n")))
     (append
      `((:filename "COMMIT_MSG"))
      (seq-map (lambda (it)
@@ -1153,51 +1163,47 @@ Optionally instruct function to SET-FILENAME."
       :location ,location
       :side ,side)))
 
-(defun git-review--add-comment-overlay ()
-  "Add a comment overlay."
-  (let* ((side (plist-get git-review--current-conversation :side)))
+(defun git-review--add-comment-overlay (conversation)
+  "Add a CONVERSATION overlay."
+  ;; TODO(Niklas Eklund, 20230130): Rename to conversation
+  (let* ((side (plist-get conversation :side)))
     (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
-      (let* ((buffer-overlays (overlays-in (point-min) (point-max)))
-             (ov (or (thread-last buffer-overlays
-                                  (seq-find (lambda (ov) (when-let ((conversation-id (overlay-get ov 'git-review-conversation-id)))
-                                                      (and (eq conversation-id (plist-get git-review--current-conversation :id))
-                                                         (eq 'region (overlay-get ov 'git-review-overlay-type)))))))
-                     (make-overlay (let-alist (plist-get git-review--current-conversation :location) .start-point)
-                                   (let-alist (plist-get git-review--current-conversation :location) .end-point)))))
-        (overlay-put ov 'git-review-conversation-id (plist-get git-review--current-conversation :id))
+      (let* ((ov (or (seq-find (lambda (it)
+                                 (eq 'region (overlay-get it 'git-review-overlay-type)))
+                               (git-review--conversation-overlays conversation))
+                     (make-overlay (let-alist (plist-get conversation :location) .start-point)
+                                   (let-alist (plist-get conversation :location) .end-point)))))
+        (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
         (overlay-put ov 'git-review-overlay-type 'region)
         (overlay-put ov 'face 'ansi-color-fast-blink))
-      (git-review--add-comment-header-overlay))))
+      (git-review--add-comment-header-overlay conversation))))
 
-(defun git-review--add-comment-header-overlay ()
-  "Add a comment header overlay."
-  (let* ((side (plist-get git-review--current-conversation :side))
-         (start-point (let-alist (plist-get git-review--current-conversation :location) .start-point)))
+(defun git-review--add-comment-header-overlay (conversation)
+  "Add a CONVERSATION header overlay."
+  ;; TODO(Niklas Eklund, 20230130): Rename to conversation
+  (let* ((side (plist-get conversation :side))
+         (start-point (let-alist (plist-get conversation :location) .start-point)))
     (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
       (save-excursion
         (goto-char start-point)
         (beginning-of-line)
-        (when-let* ((buffer-overlays (overlays-in (point-min) (point-max)))
-                    (ov (thread-last buffer-overlays
-                                     (seq-find (lambda (ov)
-                                                 (when-let ((conversation-id (overlay-get ov 'git-review-conversation-id)))
-                                                      (and (eq conversation-id (plist-get git-review--current-conversation :id))
-                                                         (eq 'header (overlay-get ov 'git-review-overlay-type)))))))))
+        (when-let* ((ov (seq-find (lambda (it)
+                                 (eq 'header (overlay-get it 'git-review-overlay-type)))
+                               (git-review--conversation-overlays conversation))))
           (message "Deleting overlay")
           (delete-overlay ov))
         (let* ((ov (make-overlay (point) (point)))
-               (first-comment (or (seq-first (plist-get git-review--current-conversation :comments))
-                                  git-review--current-comment))
+               (first-comment (seq-first (plist-get conversation :comments)))
+               (last-comment (car (last (plist-get conversation :comments))))
                (time (when (plist-get first-comment :timestamp)
                        (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get first-comment :timestamp))))
                (comment-message (plist-get first-comment :message))
                (summary (seq-elt (split-string comment-message "\n") 0))
-               (draft (plist-get git-review--current-comment :draft))
+               (draft (plist-get last-comment :draft))
                (summary-str (truncate-string-to-width summary 30))
                (comment-header
                 (concat git-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) (when draft " DRAFT") "\n")))
-
-          (overlay-put ov 'git-review-conversation-id (plist-get git-review--current-conversation :id))
+          (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
           (overlay-put ov 'git-review-overlay-type 'header)
           (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header)))))))
 
@@ -1210,7 +1216,7 @@ Optionally instruct function to SET-FILENAME."
                          (setq git-review--current-comment (thread-last (plist-get it :comments)
                                                                         (seq-reverse)
                                                                         (seq-first)))
-                         (git-review--add-comment-overlay)
+                         (git-review--add-comment-overlay it)
                          (setq git-review--current-conversation nil)
                          (setq git-review--current-comment nil)))))
 
@@ -1291,8 +1297,6 @@ Optionally instruct function to SET-FILENAME."
   (string-join
    (thread-last git-review--annotation-config
                 (seq-map (lambda (config)
-                           (setq test-annotation (alist-get candidate git-review--annotations nil nil #'equal))
-                           (setq test-config config)
                            (when-let* ((annotation (alist-get candidate git-review--annotations nil nil #'equal))
                                        (padding 3)
                                        (str (alist-get (plist-get config :name) annotation))
