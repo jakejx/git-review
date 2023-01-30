@@ -672,7 +672,7 @@ otherwise create it."
   (setq git-review--conversations
         (append (seq-remove (lambda (it)
                               (equal (plist-get it :id) (plist-get conversation :id)))
-                            (plist-get conversation :comments))
+                            git-review--conversations)
                 `(,conversation))))
 
 (defun git-review--conversation-overlays (conversation)
@@ -1149,6 +1149,8 @@ Optionally instruct function to SET-FILENAME."
   "Create a conversation."
   (let* ((start-position (min (mark) (point)))
          (end-position (max (mark) (point)))
+         ;; TODO(Niklas Eklund, 20230130): Remove dependency to start
+         ;; and end position because remote comments don't have that
          (location
           `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
             (start-column . ,(save-excursion (goto-char start-position) (current-column)))
@@ -1157,7 +1159,6 @@ Optionally instruct function to SET-FILENAME."
             (end-column . ,(save-excursion (goto-char end-position) (current-column)))
             (end-point . ,end-position)))
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
-
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
       :filename ,(git-review--current-file)
       :location ,location
