@@ -1210,13 +1210,17 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--restore-comment-overlays ()
   "Restore comment overlays in the current file."
-  (let* ((file-conversations
-          (seq-filter (lambda (it)
-                        (equal (plist-get it :filename) (git-review--current-file)))
-                      git-review--conversations)))
+  (let* ((file-conversations (git-review--file-conversations
+                              (git-review--current-file))))
     (seq-do (lambda (conversation)
               (git-review--add-comment-overlay conversation))
             file-conversations)))
+
+(defun git-review--file-conversations (file)
+  "Return conversations on FILE."
+  (seq-filter (lambda (it)
+                (equal (plist-get it :filename) file))
+              git-review--conversations))
 
 (defun git-review--next-file ()
   "Return next file."
@@ -1314,12 +1318,11 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-type (entry)
   "Return ENTRY's type."
-  (let-alist (cdr entry)
-    (pcase .type
-      ("A" "ADDED")
-      ("D" "DELETED")
-      ("M" "MODIFIED")
-      (_ "RENAMED"))))
+  (pcase (plist-get (cdr entry) :type)
+    ("A" "ADDED")
+    ("D" "DELETED")
+    ("M" "MODIFIED")
+    (_ "RENAMED")))
 
 (defun git-review--annotation-file-reviewed (entry)
   "Return ENTRY's review status."
@@ -1337,10 +1340,10 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-comments (entry)
   "Return ENTRY's comments status."
-  (let-alist (cdr entry)
-    (if .comments
-        (format "COMMENTS(%s)" (length .comments))
-      "")))
+  (if-let* ((file (plist-get (cdr entry) :filename))
+            (file-conversations (git-review--file-conversations file)))
+      (format "CONVERSATIONS(%s)" (length file-conversations))
+    ""))
 
 ;;;; Major modes
 
