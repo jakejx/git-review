@@ -1140,7 +1140,7 @@ Optionally instruct function to SET-FILENAME."
             (seq-position review-files (git-review--current-file))))
          (number-of-files (1- (seq-length review-files)))
          (progress (* (git-review--progress) 100)))
-    (format "*Ediff Review: [%s/%s] %s%%*"
+    (format "*Git Review: [%s/%s] %s%%*"
             file-index
             number-of-files
             progress)))
@@ -1326,6 +1326,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-reviewed (entry)
   "Return ENTRY's review status."
+  ;; TODO: Needs an update
   (let-alist (cdr entry)
     (if .reviewed
         "REVIEWED"
@@ -1333,6 +1334,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-ignored (entry)
   "Return ENTRY's ignore status."
+  ;; TODO: Needs an update
   (let-alist (cdr entry)
     (if .ignore
         "IGNORED"
