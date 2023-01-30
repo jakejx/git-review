@@ -806,9 +806,6 @@ Each entry in the list is a property list with the following properties:
                                                   :change ,git-review-change
                                                   :files ,(git-review--generate-patchset-files commit-hash))))))
 
-  ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review from database
-  ;; (git-review--stored-review)
-
   ;; TODO(Niklas Eklund, 20230127): Move to other location when a
   ;; different patchset is selected. Or maybe it needs to be here in
   ;; case a stored reviewed has a non-nil base-patchset
