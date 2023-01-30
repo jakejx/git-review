@@ -189,15 +189,18 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--update-review ()
   "Update change(s) with change."
+  (git-review--update-patchsets git-review--patchset)
   (setq git-review--change (plist-put git-review--change :conversations git-review--conversations))
-  (setq git-review--change (plist-put git-review--change :patchsets git-review--patchset))
   (setq git-review--changes
         (append (seq-remove (lambda (it)
                               (equal (plist-get it :id)
                                      (plist-get git-review--change :id)))
                             git-review--changes)
                 `(,git-review--change)))
-  (git-review-update-db))
+  (git-review-update-db)
+  (setq git-review--change nil)
+  (setq git-review--patchset nil)
+  (setq git-review--conversations nil))
 
 (defun git-review-start-review ()
   "Start review."
@@ -394,9 +397,6 @@ Each entry in the list is a property list with the following properties:
   (interactive)
   (git-review-close-review-file)
   (git-review--update-review)
-  (setq git-review--change nil)
-  (setq git-review--patchset nil)
-  (setq git-review--conversations nil)
   (tab-bar-close-tab))
 
 (defun git-review-next-conversation ()
@@ -655,6 +655,16 @@ Each entry in the list is a property list with the following properties:
                               (equal (plist-get it :id) (plist-get conversation :id)))
                             git-review--conversations)
                 `(,conversation))))
+
+(defun git-review--update-patchsets (patchset)
+  "Update patchsets with PATCHSET."
+  (setq git-review--change
+        (plist-put git-review--change :patchsets
+                   (append (seq-remove (lambda (it)
+                                         (equal (plist-get it :id)
+                                                (plist-get git-review--patchset :id)))
+                                       (plist-get git-review--change :patchsets))
+                           `(,git-review--patchset)))))
 
 (defun git-review--conversation-overlays (conversation)
   "Return overlays associated with CONVERSATION."
