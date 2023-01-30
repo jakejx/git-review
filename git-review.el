@@ -129,10 +129,10 @@ Each entry in the list is a property list with the following properties:
 
 (defvar git-review--patchset nil "The current patchset.")
 (defvar git-review--conversations nil "List of conversations.")
+(defvar git-review--changes nil "List of changes.")
 
 (defvar-local git-review--current-comment nil)
 (defvar-local git-review--current-conversation nil)
-(defvar git-review--reviews nil)
 
 (defvar git-review--candidates nil)
 (defvar git-review--annotations nil)
@@ -182,32 +182,15 @@ Each entry in the list is a property list with the following properties:
       (prin1 git-review--reviews (current-buffer)))))
 
 (defun git-review--update-review ()
-  "Update reviews with review.
-
-If review can already be found in an existing group update it
-otherwise create it."
-  (if-let ((grouped-reviews
-            (alist-get git-review-change git-review--reviews nil nil #'equal)))
-      (if (seq-find (lambda (it)
-                      (and (equal (let-alist it .current-revision)
-                                  (let-alist git-review .current-revision))
-                           (equal (let-alist it .base-revision)
-                                  (let-alist git-review .base-revision))))
-                    grouped-reviews)
-          (setf (alist-get git-review-change git-review--reviews nil nil #'equal)
-                (thread-last grouped-reviews
-                             (seq-map (lambda (it)
-                                        (if (and (equal (let-alist it .current-revision)
-                                                        (let-alist git-review .current-revision))
-                                                 (equal (let-alist it .base-revision)
-                                                        (let-alist git-review .base-revision)))
-                                            git-review
-                                          it)))
-                             (vconcat)))
-        (setf (alist-get git-review-change git-review--reviews nil nil #'equal)
-              (vconcat (vconcat `(,git-review)) grouped-reviews)))
-    (setf (alist-get git-review-change git-review--reviews nil nil #'equal)
-          (vconcat `(,git-review)))))
+  "Update changes with change."
+  (setq git-review--change (plist-put :conversations git-review--conversations))
+  (setq git-review--change (plist-put :patchsets git-review--patchset))
+  (setq git-review--changes
+        (append (seq-remove (lambda (it)
+                              (equal (plist-get it :id)
+                                     (plist-get git-review--change :id))))
+                `(,git-review--change)))
+  (git-review-update-db))
 
 (defun git-review-start-review ()
   "Start review."
@@ -359,6 +342,7 @@ otherwise create it."
                              (visibility . nil)
                              (desktop-dont-save . t)
                              (tab-bar-lines . 0)
+                             ;; TODO: Conditionally use scroll-bar if conversation is long
                              ;; (vertical-scroll-bars . t)
                              (tool-bar-lines . 0)
                              (menu-bar-lines . 0))))
@@ -402,11 +386,10 @@ otherwise create it."
   "Quit `git-review' review."
   (interactive)
   (git-review-close-review-file)
-  ;; TODO: Make this work again
-  ;; (git-review--update-review)
-  ;; (when git-review-change
-  ;;   (git-review-update-db))
+  (git-review--update-review)
+  (setq git-review--change nil)
   (setq git-review--patchset nil)
+  (setq git-review--conversations nil)
   (tab-bar-close-tab))
 
 (defun git-review-next-conversation ()
@@ -784,19 +767,27 @@ otherwise create it."
   (let* ((git-review-change (when git-review-determine-change-function
                               (funcall git-review-determine-change-function)))
          (git-review-patchset (when git-review-determine-patchset-function
-                                (funcall git-review-determine-patchset-function)))
-         (commit-hash (with-temp-buffer
-                        (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
-                        (buffer-string)))
-         (parent-hash (with-temp-buffer
-                        (call-process-shell-command (concat "git show --no-patch --pretty=format:%P " commit-hash) nil t)
-                        (buffer-string))))
-    (setq git-review--conversations nil)
-    (setq git-review--patchset `(:commit-hash ,commit-hash
-                                              :parent-hash ,parent-hash
-                                              :number ,git-review-patchset
-                                              :change ,git-review-change
-                                              :files ,(git-review--generate-patchset-files commit-hash))))
+                                (funcall git-review-determine-patchset-function))))
+
+    (git-review--restore-review git-review-change git-review-patchset)
+
+    (unless git-review-change
+      (setq git-review--change `(:id ,git-review-change
+                                     :current-patchset ,git-review-patchset))
+      (setq git-review--conversations nil))
+
+    (unless git-review-patchset
+      (let* ((commit-hash (with-temp-buffer
+                            (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
+                            (buffer-string)))
+             (parent-hash (with-temp-buffer
+                            (call-process-shell-command (concat "git show --no-patch --pretty=format:%P " commit-hash) nil t)
+                            (buffer-string))))
+        (setq git-review--patchset `(:commit-hash ,commit-hash
+                                                  :parent-hash ,parent-hash
+                                                  :number ,git-review-patchset
+                                                  :change ,git-review-change
+                                                  :files ,(git-review--generate-patchset-files commit-hash))))))
 
   ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review from database
   ;; (git-review--stored-review)
@@ -876,16 +867,17 @@ otherwise create it."
               updated-files)
       (setf (alist-get 'files git-review) updated-files))))
 
-(defun git-review--stored-review (current-revision base-revision)
-  "Return a stored review of CURRENT-REVISION and BASE-REVISION."
-  (when git-review-change
-    (when-let ((grouped-reviews (alist-get git-review-change git-review--reviews nil nil #'equal)))
-      (seq-find (lambda (it)
-                  (and (equal (let-alist it .current-revision)
-                              current-revision)
-                       (equal (let-alist it .base-revision)
-                              base-revision)))
-                grouped-reviews))))
+(defun git-review--restore-review (change-id patchset-number)
+  "Restore review with matching CHANGE-ID and PATCHSET-NUMBER."
+  (when-let ((change (seq-find (lambda (it)
+                                 (equal (plist-get it :id) change-id))
+                               git-review--reviews)))
+    (setq git-review--change change)
+    (setq git-review--conversations (plist-get change :conversations))
+    (when-let ((patchset (seq-find (lambda (it)
+                                     (equal (plist-get it :number) patchset-number))
+                                   (plist-get change :patchsets))))
+      (setq git-review--patchset patchset))))
 
 (defun git-review--restore-buffer-location ()
   "Restore buffer location to nearest diff in revision buffer.
