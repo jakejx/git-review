@@ -387,7 +387,7 @@ otherwise create it."
   "Configure size of FRAME using info from CONVERSATION and LINE-COUNT."
   (save-excursion
     ;; TODO: Improve location, search for correct header overlay instead
-    (goto-char (let-alist (plist-get conversation :location) .start-point))
+    (goto-char (git-review--conversation-start-point conversation))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
                  (frame-width (* (window-font-width) 120))
@@ -419,14 +419,14 @@ otherwise create it."
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist (plist-get conversation :location) .start-point)))
+          (goto-char (git-review--conversation-start-point conversation)))
         (save-excursion
           (with-selected-window (git-review--control-window)
             (let ((last-command-event ?b))
               (ediff-jump-to-difference-at-point nil))
             (git-review---maybe-modify-overlays)))
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist (plist-get conversation :location) .start-point)))
+          (goto-char (git-review--conversation-start-point conversation)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
     (message "No next conversation found")))
@@ -441,14 +441,14 @@ otherwise create it."
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist (plist-get conversation :location) .start-point)))
+          (goto-char (git-review--conversation-start-point conversation)))
         (save-excursion
           (with-selected-window (git-review--control-window)
             (let ((last-command-event ?b))
               (ediff-jump-to-difference-at-point nil))
             (git-review---maybe-modify-overlays)))
         (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (let-alist (plist-get conversation :location) .start-point)))
+          (goto-char (git-review--conversation-start-point conversation)))
         (git-review---maybe-modify-overlays)
         (git-review--maybe-set-reviewed))
     (message "No previous conversation found")))
@@ -1154,10 +1154,8 @@ Optionally instruct function to SET-FILENAME."
          (location
           `((start-line . ,(save-excursion (goto-char start-position) (current-line)))
             (start-column . ,(save-excursion (goto-char start-position) (current-column)))
-            (start-point . ,start-position)
             (end-line . ,(save-excursion (goto-char end-position) (current-line)))
-            (end-column . ,(save-excursion (goto-char end-position) (current-column)))
-            (end-point . ,end-position)))
+            (end-column . ,(save-excursion (goto-char end-position) (current-column)))))
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
           :filename ,(git-review--current-file)
@@ -1196,13 +1194,8 @@ Optionally instruct function to SET-FILENAME."
     (or (seq-find (lambda (it)
                     (eq 'region (overlay-get it 'git-review-overlay-type)))
                   (git-review--conversation-overlays conversation))
-        (let-alist (plist-get conversation :location)
-          (make-overlay (save-excursion (goto-line (1+ .start-line))
-                                        (move-to-column .start-column)
-                                        (point))
-                        (save-excursion (goto-line (1+ .end-line))
-                                        (move-to-column .end-column)
-                                        (point)))))))
+        (make-overlay (git-review--conversation-start-point conversation)
+                      (git-review--conversation-end-point conversation)))))
 
 (defun git-review--get-conversation-header-overlay (conversation)
   "Return header overlay for CONVERSATION."
@@ -1210,7 +1203,8 @@ Optionally instruct function to SET-FILENAME."
                            git-review-base-revision-buffer
                          git-review-current-revision-buffer)
     (save-excursion
-      (goto-char (let-alist (plist-get conversation :location) .start-point))
+      (goto-char (point-min))
+      (forward-line (let-alist (plist-get conversation :location) .start-line))
       (beginning-of-line)
       (or (seq-find (lambda (it)
                       (eq 'header (overlay-get it 'git-review-overlay-type)))
@@ -1224,6 +1218,22 @@ Optionally instruct function to SET-FILENAME."
     (seq-do (lambda (conversation)
               (git-review--add-conversation-overlays conversation))
             file-conversations)))
+
+(defun git-review--conversation-start-point (conversation)
+  "Return start point of CONVERSATION."
+  (let-alist (plist-get conversation :location)
+    (save-excursion (goto-char (point-min))
+                    (forward-line .end-line)
+                    (move-to-column .start-column)
+                    (point))))
+
+(defun git-review--conversation-end-point (conversation)
+  "Return end point of CONVERSATION."
+  (let-alist (plist-get conversation :location)
+    (save-excursion (goto-char (point-min))
+                    (forward-line .end-line)
+                    (move-to-column .end-column)
+                    (point))))
 
 (defun git-review--file-conversations (file)
   "Return conversations on FILE."
@@ -1262,8 +1272,8 @@ Optionally instruct function to SET-FILENAME."
                (seq-filter (lambda (it)
                              (equal (plist-get it :filename) (git-review--current-file))))
                (seq-map (lambda (it)
-                          (let ((location (plist-get it :location)))
-                            (let-alist location (cons (- .start-point (point)) it)))))
+                          (let ((start-position (git-review--conversation-start-point it)))
+                            (cons (- start-position  (point)) it))))
                (seq-sort-by (lambda (it) (car it)) #'<)
                (seq-find (lambda (it) (> (car it) 0)))
                (cdr)))
@@ -1274,8 +1284,8 @@ Optionally instruct function to SET-FILENAME."
                (seq-filter (lambda (it)
                              (equal (plist-get it :filename) (git-review--current-file))))
                (seq-map (lambda (it)
-                          (let ((location (plist-get it :location)))
-                            (let-alist location (cons (- .start-point (point)) it)))))
+                          (let ((start-position (git-review--conversation-start-point it)))
+                            (cons (- start-position (point)) it))))
                (seq-sort-by (lambda (it) (car it)) #'<)
                (seq-find (lambda (it) (< (car it) 0)))
                (cdr)))
