@@ -269,7 +269,7 @@ otherwise create it."
                 (kill-buffer)))
             buffers)
     (seq-do (lambda (it)
-              (when (string-match (rx bol "*" (or "ediff" "Ediff" "Git-Review")) (buffer-name it))
+              (when (string-match (rx bol "*" (or "ediff" "Git" "Git-Review")) (buffer-name it))
                 (kill-buffer it)))
             (buffer-list))))
 

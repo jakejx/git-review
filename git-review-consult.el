@@ -36,7 +36,7 @@
 (defcustom git-review-file-consult-sources
   '(git-review-consult--source-files
     git-review-consult--source-ignored
-    git-review-consult--source-comments
+    git-review-consult--source-conversations
     git-review-consult--source-unreviewed)
   "Sources used by `git-review-consult-file'.
 
@@ -84,8 +84,8 @@ See `consult-multi' for a description of the source values."
                             (seq-map #'car))))
   "All unreviewed `git-review' files as a source for `consult'.")
 
-(defvar git-review-consult--source-comments
-  `(:narrow (?c . "Comments")
+(defvar git-review-consult--source-conversations
+  `(:narrow (?c . "Conversations")
             :hidden t
             :category git-review-file
             :annotate git-review--annotation-function
@@ -96,9 +96,9 @@ See `consult-multi' for a description of the source values."
                             (seq-remove #'git-review-consult--ignore-file-p)
                             (seq-filter
                              (lambda (x)
-                               (let-alist (cdr x) .comments)))
+                               (git-review--file-conversations (plist-get (cdr x) :filename))))
                             (seq-map #'car))))
-  "All `git-review' files with comments as a source for `consult'.")
+  "All `git-review' files with conversations as a source for `consult'.")
 
 ;;;; Functions
 
