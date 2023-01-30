@@ -254,7 +254,7 @@ otherwise create it."
              ((symbol-function #'ediff-set-keys) #'ignore)
              (default-directory (git-review--project-root)))
     (ediff-buffers git-review-base-revision-buffer git-review-current-revision-buffer)
-    (git-review--restore-comment-overlays)
+    (git-review--init-conversation-overlays)
     (git-review--restore-buffer-location)))
 
 (defun git-review-close-review-file ()
@@ -318,18 +318,18 @@ otherwise create it."
   (unless (string= file "COMMIT_MSG")
     (let* ((file-info (git-review--file-info file))
            (base-current-regions (git-review-hunk-regions (git-review--base-revision)
-                                                            (git-review--current-revision)
-                                                            (let-alist file-info .base-filename)
-                                                            file))
+                                                          (git-review--current-revision)
+                                                          (let-alist file-info .base-filename)
+                                                          file))
            (current-regions (git-review-hunk-regions (concat (git-review--current-revision) "~1")
-                                                       (git-review--current-revision)
-                                                       file
-                                                       file)))
+                                                     (git-review--current-revision)
+                                                     file
+                                                     file)))
       (git-review--update-file file 'review-diff-regions base-current-regions)
       (git-review--update-file file 'current-revision-diff-regions current-regions)
       (not
        (git-review--file-differences-intersect-p base-current-regions
-                                                   current-regions)))))
+                                                 current-regions)))))
 
 ;;;; Commands
 
@@ -392,7 +392,7 @@ otherwise create it."
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
                  (frame-width (* (window-font-width) 120))
                  (frame-height (min (* (line-pixel-height) line-count)
-                                        (- window-y-end (cdr (window-absolute-pixel-position (point))))))
+                                    (- window-y-end (cdr (window-absolute-pixel-position (point))))))
                  (x-position (- (car (window-absolute-pixel-position (point))) frame-x-start))
                  (y-position (- (cdr (window-absolute-pixel-position (point))) (window-font-height))))
       (set-frame-size frame frame-width frame-height t)
@@ -413,8 +413,8 @@ otherwise create it."
   "Go to next conversation."
   (interactive)
   (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-                      (save-excursion
-                        (git-review--next-conversation)))))
+                           (save-excursion
+                             (git-review--next-conversation)))))
       (progn
         (git-review--restore-overlays)
         ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
@@ -489,9 +489,9 @@ otherwise create it."
                                     `(,file . ,(git-review--file-info file)))
                                   (git-review--files)))
              (file-info (git-review-completing-read candidates
-                                                      "Select file: "
-                                                      'git-review-file
-                                                      git-review-file-annotation))
+                                                    "Select file: "
+                                                    'git-review-file
+                                                    git-review-file-annotation))
              (file (plist-get file-info :filename)))
     (git-review--switch-file file)))
 
@@ -614,14 +614,14 @@ otherwise create it."
                 (comment (thread-last comments
                                       (seq-reverse)
                                       (seq-first))))
-            (if (plist-get comment :draft)
-                (progn
-                  (insert (plist-get comment :message))
-                  (setq git-review--current-comment comment))
-              (message "Warning: Cannot reply to this comment"))
+          (if (plist-get comment :draft)
+              (progn
+                (insert (plist-get comment :message))
+                (setq git-review--current-comment comment))
+            (message "Warning: Cannot reply to this comment"))
         (setq git-review--current-comment `(:user ,git-review-user
-                                            :draft t
-                                            :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))))
+                                                  :draft t
+                                                  :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))))
       (when git-review-comment-major-mode
         (funcall git-review-comment-major-mode))
       (git-review-comment-mode)
@@ -636,7 +636,7 @@ otherwise create it."
          (conversation (git-review--update-conversation-comment git-review--current-conversation
                                                                 comment)))
     (git-review--update-conversations conversation)
-    (git-review--add-comment-overlay conversation))
+    (git-review--add-conversation-overlays conversation))
   (setq git-review--current-comment nil)
   (setq git-review--current-conversation nil)
   (quit-restore-window))
@@ -680,9 +680,9 @@ otherwise create it."
   (when-let* ((conversation-id (plist-get conversation :id))
               (buffer-overlays (overlays-in (point-min) (point-max))))
     (seq-filter (lambda (overlay)
-                (equal (overlay-get overlay 'git-review-conversation-id)
-                       conversation-id))
-              buffer-overlays)))
+                  (equal (overlay-get overlay 'git-review-conversation-id)
+                         conversation-id))
+                buffer-overlays)))
 
 (defun git-review--switch-file (file)
   "Switch to FILE."
@@ -772,8 +772,8 @@ otherwise create it."
 (defun git-review--store-buffer-locations ()
   "Store locations in review buffers for current review file."
   (git-review--update-file (git-review--current-file) 'buffer-location
-                             `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
-                               (b . ,(with-current-buffer git-review-current-revision-buffer (point))))))
+                           `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
+                             (b . ,(with-current-buffer git-review-current-revision-buffer (point))))))
 
 (defun git-review--store-progress ()
   "Store progress percentage."
@@ -799,18 +799,18 @@ otherwise create it."
                               (funcall git-review-determine-change-function)))
          (git-review-patchset (when git-review-determine-patchset-function
                                 (funcall git-review-determine-patchset-function)))
-        (commit-hash (with-temp-buffer
-                       (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
-                       (buffer-string)))
-        (parent-hash (with-temp-buffer
-                       (call-process-shell-command (concat "git show --no-patch --pretty=format:%P " commit-hash) nil t)
-                       (buffer-string))))
+         (commit-hash (with-temp-buffer
+                        (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
+                        (buffer-string)))
+         (parent-hash (with-temp-buffer
+                        (call-process-shell-command (concat "git show --no-patch --pretty=format:%P " commit-hash) nil t)
+                        (buffer-string))))
     (setq git-review--conversations nil)
     (setq git-review--patchset `(:commit-hash ,commit-hash
-                                 :parent-hash ,parent-hash
-                                 :number ,git-review-patchset
-                                 :change ,git-review-change
-                                 :files ,(git-review--generate-patchset-files commit-hash))))
+                                              :parent-hash ,parent-hash
+                                              :number ,git-review-patchset
+                                              :change ,git-review-change
+                                              :files ,(git-review--generate-patchset-files commit-hash))))
 
   ;; TODO(Niklas Eklund, 20230127): Find and return existing patchset review from database
   ;; (git-review--stored-review)
@@ -908,7 +908,7 @@ This is done for files that has already been reviewed before and where
 there is a previous location to return to."
   (let-alist (git-review--file-info)
     (if (and .buffer-location
-               ; `ediff' complains when location is at start of buffer
+                                        ; `ediff' complains when location is at start of buffer
              (> .buffer-location.b 1))
         (progn
           (with-selected-window (get-buffer-window git-review-current-revision-buffer)
@@ -1045,7 +1045,7 @@ Optionally instruct function to SET-FILENAME."
               (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
       (not
        (git-review--file-differences-intersect-p file-regions
-                                                   (git-review--current-revision-diff-regions))))))
+                                                 (git-review--current-revision-diff-regions))))))
 
 (defun git-review---maybe-modify-overlays ()
   "Maybe modify overlays if current diff is due to a rebase."
@@ -1075,7 +1075,7 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--maybe-set-reviewed ()
   "Set file to reviewed if the last diff has been reached."
   (when (and (not (git-review--is-reviewed-p (git-review--current-file)))
-         (= (1+ ediff-current-difference) ediff-number-of-differences))
+             (= (1+ ediff-current-difference) ediff-number-of-differences))
     (git-review--update-file (git-review--current-file) 'reviewed t)
     (git-review--store-progress)
     (with-current-buffer (window-buffer (git-review--control-window))
@@ -1108,9 +1108,9 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--file-differences-intersect-p (file-diffs1 file-diffs2)
   "Return t if FILE-DIFFS1 intersects with FILE-DIFFS2."
   (or (git-review--diff-regions-intersect-p (alist-get 'a file-diffs1)
-                                              (alist-get 'a file-diffs2))
+                                            (alist-get 'a file-diffs2))
       (git-review--diff-regions-intersect-p (alist-get 'b file-diffs1)
-                                              (alist-get 'b file-diffs2))))
+                                            (alist-get 'b file-diffs2))))
 
 (defun git-review--current-git-branch ()
   "Return current branch name."
@@ -1160,60 +1160,69 @@ Optionally instruct function to SET-FILENAME."
             (end-point . ,end-position)))
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
-      :filename ,(git-review--current-file)
-      :location ,location
-      :side ,side)))
+          :filename ,(git-review--current-file)
+          :location ,location
+          :side ,side)))
 
-(defun git-review--add-comment-overlay (conversation)
-  "Add a CONVERSATION overlay."
-  ;; TODO(Niklas Eklund, 20230130): Rename to conversation
-  (let* ((side (plist-get conversation :side)))
-    (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
-      (let* ((ov (or (seq-find (lambda (it)
-                                 (eq 'region (overlay-get it 'git-review-overlay-type)))
-                               (git-review--conversation-overlays conversation))
-                     (make-overlay (let-alist (plist-get conversation :location) .start-point)
-                                   (let-alist (plist-get conversation :location) .end-point)))))
-        (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
-        (overlay-put ov 'git-review-overlay-type 'region)
-        (overlay-put ov 'face 'ansi-color-fast-blink))
-      (git-review--add-comment-header-overlay conversation))))
+(defun git-review--add-conversation-overlays (conversation)
+  "Add overlays for CONVERSATION."
+  ;; Region overlay
+  (let* ((ov (git-review--get-conversation-region-overlay conversation)))
+    (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
+    (overlay-put ov 'git-review-overlay-type 'region)
+    (overlay-put ov 'face 'ansi-color-fast-blink))
 
-(defun git-review--add-comment-header-overlay (conversation)
-  "Add a CONVERSATION header overlay."
-  ;; TODO(Niklas Eklund, 20230130): Rename to conversation
-  (let* ((side (plist-get conversation :side))
-         (start-point (let-alist (plist-get conversation :location) .start-point)))
-    (with-current-buffer (if (eq side 'a) git-review-base-revision-buffer git-review-current-revision-buffer)
-      (save-excursion
-        (goto-char start-point)
-        (beginning-of-line)
-        (when-let* ((ov (seq-find (lambda (it)
-                                 (eq 'header (overlay-get it 'git-review-overlay-type)))
-                               (git-review--conversation-overlays conversation))))
-          (message "Deleting overlay")
-          (delete-overlay ov))
-        (let* ((ov (make-overlay (point) (point)))
-               (first-comment (seq-first (plist-get conversation :comments)))
-               (last-comment (car (last (plist-get conversation :comments))))
-               (time (when (plist-get first-comment :timestamp)
-                       (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get first-comment :timestamp))))
-               (comment-message (plist-get first-comment :message))
-               (summary (seq-elt (split-string comment-message "\n") 0))
-               (draft (plist-get last-comment :draft))
-               (summary-str (truncate-string-to-width summary 30))
-               (comment-header
-                (concat git-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) (when draft " DRAFT") "\n")))
-          (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
-          (overlay-put ov 'git-review-overlay-type 'header)
-          (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header)))))))
+  ;; Header overlay
+  (let* ((ov (git-review--get-conversation-header-overlay conversation))
+         (first-comment (seq-first (plist-get conversation :comments)))
+         (last-comment (car (last (plist-get conversation :comments))))
+         (time (when (plist-get first-comment :timestamp)
+                 (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get first-comment :timestamp))))
+         (comment-message (plist-get first-comment :message))
+         (summary (seq-elt (split-string comment-message "\n") 0))
+         (draft (plist-get last-comment :draft))
+         (summary-str (truncate-string-to-width summary 30))
+         (comment-header
+          (concat git-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) (when draft " DRAFT") "\n")))
+    (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
+    (overlay-put ov 'git-review-overlay-type 'header)
+    (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header))))
 
-(defun git-review--restore-comment-overlays ()
-  "Restore comment overlays in the current file."
+(defun git-review--get-conversation-region-overlay (conversation)
+  "Return region overlay for CONVERSATION."
+  (with-current-buffer (if (eq (plist-get conversation :side) 'a)
+                           git-review-base-revision-buffer
+                         git-review-current-revision-buffer)
+    (or (seq-find (lambda (it)
+                    (eq 'region (overlay-get it 'git-review-overlay-type)))
+                  (git-review--conversation-overlays conversation))
+        (let-alist (plist-get conversation :location)
+          (make-overlay (save-excursion (goto-line (1+ .start-line))
+                                        (move-to-column .start-column)
+                                        (point))
+                        (save-excursion (goto-line (1+ .end-line))
+                                        (move-to-column .end-column)
+                                        (point)))))))
+
+(defun git-review--get-conversation-header-overlay (conversation)
+  "Return header overlay for CONVERSATION."
+  (with-current-buffer (if (eq (plist-get conversation :side) 'a)
+                           git-review-base-revision-buffer
+                         git-review-current-revision-buffer)
+    (save-excursion
+      (goto-char (let-alist (plist-get conversation :location) .start-point))
+      (beginning-of-line)
+      (or (seq-find (lambda (it)
+                      (eq 'header (overlay-get it 'git-review-overlay-type)))
+                    (git-review--conversation-overlays conversation))
+          (make-overlay (point) (point))))))
+
+(defun git-review--init-conversation-overlays ()
+  "Initialize overlays for conversations."
   (let* ((file-conversations (git-review--file-conversations
                               (git-review--current-file))))
     (seq-do (lambda (conversation)
-              (git-review--add-comment-overlay conversation))
+              (git-review--add-conversation-overlays conversation))
             file-conversations)))
 
 (defun git-review--file-conversations (file)
@@ -1251,7 +1260,7 @@ Optionally instruct function to SET-FILENAME."
   "Return next conversation."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
-                           (equal (plist-get it :filename) (git-review--current-file))))
+                             (equal (plist-get it :filename) (git-review--current-file))))
                (seq-map (lambda (it)
                           (let ((location (plist-get it :location)))
                             (let-alist location (cons (- .start-point (point)) it)))))
@@ -1263,7 +1272,7 @@ Optionally instruct function to SET-FILENAME."
   "Return previous comment."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
-                           (equal (plist-get it :filename) (git-review--current-file))))
+                             (equal (plist-get it :filename) (git-review--current-file))))
                (seq-map (lambda (it)
                           (let ((location (plist-get it :location)))
                             (let-alist location (cons (- .start-point (point)) it)))))
