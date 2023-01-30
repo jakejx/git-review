@@ -130,8 +130,8 @@ Each entry in the list is a property list with the following properties:
 (defvar git-review--patchset nil "The current patchset.")
 (defvar git-review--conversations nil "List of conversations.")
 
-(defvar git-review--current-comment nil)
-(defvar git-review--current-conversation nil)
+(defvar-local git-review--current-comment nil)
+(defvar-local git-review--current-conversation nil)
 (defvar git-review--reviews nil)
 
 (defvar git-review--candidates nil)
@@ -386,7 +386,7 @@ otherwise create it."
 (defun git-review--conversation-frame-configure-size (frame conversation line-count)
   "Configure size of FRAME using info from CONVERSATION and LINE-COUNT."
   (save-excursion
-    ;; TODO: Improve location, search for correct header overlay instead
+    ;; TODO: Improve by determining position on screen to know if window should be up or down
     (goto-char (git-review--conversation-start-point conversation))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
@@ -602,29 +602,25 @@ otherwise create it."
 (defun git-review-conversation-dwim ()
   "Continue on, or start a new, conversation."
   (interactive)
-  (setq git-review--current-conversation
-        (or
-         (git-review--conversation-at-point)
-         (git-review--create-conversation)))
-  (let* ((buffer (get-buffer-create "*git-review-comment*")))
+  (let* ((conversation
+          (or (git-review--conversation-at-point)
+              (git-review--create-conversation)))
+         (comment (or (seq-first (seq-reverse (plist-get conversation :comments)))
+                      `(:user ,git-review-user
+                              :draft t
+                              :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))))
+         (buffer (get-buffer-create "*git-review-comment*")))
     (display-buffer buffer git-review-comment-buffer-action)
     (with-current-buffer buffer
       (erase-buffer)
-      (if-let* ((comments (plist-get git-review--current-conversation :comments))
-                (comment (thread-last comments
-                                      (seq-reverse)
-                                      (seq-first))))
-          (if (plist-get comment :draft)
-              (progn
-                (insert (plist-get comment :message))
-                (setq git-review--current-comment comment))
-            (message "Warning: Cannot reply to this comment"))
-        (setq git-review--current-comment `(:user ,git-review-user
-                                                  :draft t
-                                                  :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))))
+      (when-let ((is-draft (plist-get comment :draft))
+                 (message (plist-get comment :message)))
+        (insert message))
       (when git-review-comment-major-mode
         (funcall git-review-comment-major-mode))
       (git-review-comment-mode)
+      (setq git-review--current-conversation conversation)
+      (setq git-review--current-comment comment)
       (select-window (get-buffer-window (current-buffer)))
       (goto-char (point-max)))))
 
@@ -637,8 +633,6 @@ otherwise create it."
                                                                 comment)))
     (git-review--update-conversations conversation)
     (git-review--add-conversation-overlays conversation))
-  (setq git-review--current-comment nil)
-  (setq git-review--current-conversation nil)
   (quit-restore-window))
 
 (defun git-review-kill-comment ()
@@ -652,9 +646,6 @@ otherwise create it."
 (defun git-review-quit-comment ()
   "Quit review comment."
   (interactive)
-  ;; TODO: Replace these with buffer local variables so that this is not necessary
-  (setq git-review--current-conversation nil)
-  (setq git-review--current-comment nil)
   (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
 
 ;;;; Support functions
