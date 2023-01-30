@@ -164,27 +164,27 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review-init-db ()
   "Initialize the review database."
-  (unless git-review--reviews
+  (unless git-review--changes
     (let ((db (expand-file-name "git-review.db" git-review-database-dir)))
       (if (file-exists-p db)
-          (setq git-review--reviews
+          (setq git-review--changes
                 (with-temp-buffer
                   (insert-file-contents db)
                   (goto-char (point-min))
                   (read (current-buffer))))
         (make-empty-file db t)
-        (setq git-review--reviews nil)))))
+        (setq git-review--changes nil)))))
 
 (defun git-review-update-db ()
   "Update the review database."
   (let ((db (expand-file-name "git-review.db" git-review-database-dir)))
     (with-temp-file db
-      (prin1 git-review--reviews (current-buffer)))))
+      (prin1 git-review--changes (current-buffer)))))
 
 (defun git-review--update-review ()
   "Update changes with change."
-  (setq git-review--change (plist-put :conversations git-review--conversations))
-  (setq git-review--change (plist-put :patchsets git-review--patchset))
+  (setq git-review--change (plist-put git-review--change :conversations git-review--conversations))
+  (setq git-review--change (plist-put git-review--change :patchsets git-review--patchset))
   (setq git-review--changes
         (append (seq-remove (lambda (it)
                               (equal (plist-get it :id)
@@ -871,7 +871,7 @@ Each entry in the list is a property list with the following properties:
   "Restore review with matching CHANGE-ID and PATCHSET-NUMBER."
   (when-let ((change (seq-find (lambda (it)
                                  (equal (plist-get it :id) change-id))
-                               git-review--reviews)))
+                               git-review--changes)))
     (setq git-review--change change)
     (setq git-review--conversations (plist-get change :conversations))
     (when-let ((patchset (seq-find (lambda (it)
