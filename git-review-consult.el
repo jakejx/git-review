@@ -125,7 +125,7 @@ See `consult-multi' for a description of the source values."
 
 (defun git-review-consult--ignore-file-p (file)
   "Return t if FILE should be ignored."
-  (let-alist file .ignore))
+  (plist-get (cdr file) :ignore))
 
 (defun git-review-consult--decode-file-candidate (candidate)
   "Return change matching CANDIDATE."

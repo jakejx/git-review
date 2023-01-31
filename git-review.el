@@ -849,8 +849,7 @@ Each entry in the list is a property list with the following properties:
   ;;   (git-review--remove-rebased-files-from-review))
 
   (git-review--add-metadata-to-files)
-  ;; (git-review--add-ignore-tag-to-files)
-  )
+  (git-review--add-ignore-tag-to-files))
 
 (defun git-review--generate-patchset-files (commit-hash)
   "Return a list of files in patchset with COMMIT-HASH."
@@ -877,15 +876,13 @@ Each entry in the list is a property list with the following properties:
               files-in-patchset))))
 
 (defun git-review--add-ignore-tag-to-files ()
-  "Add ignore tag to files that should be ignored in variable `git-review'."
-  (let ((files (plist-get git-review--patchset :files)))
-    (setq git-review--patchset
-          (plist-put git-review--patchset :files
-                     (seq-map (lambda (it)
-                                (if (git-review--ignore-file-p (plist-get it :filename))
-                                    (plist-put it :ignore t)
-                                  it))
-                              files)))))
+  "Add ignore tag to files that should be ignored."
+  (git-review--update-files
+   (seq-map (lambda (it)
+              (if (git-review--ignore-file-p it)
+                  (plist-put it :ignore t)
+                it))
+            (git-review--get-files))))
 
 (defun git-review--add-metadata-to-files ()
   "Add metadata to files in variable `git-review--patchset'."
@@ -893,8 +890,7 @@ Each entry in the list is a property list with the following properties:
     (setq git-review--patchset
           (plist-put git-review--patchset :files
                      (seq-map (lambda (it)
-                                (if-let ((metadata (git-review--file-metadata
-                                                    (plist-get it :filename))))
+                                (if-let ((metadata (git-review--file-metadata it)))
                                     (plist-put it :metadata metadata)
                                   it))
                               files)))))
@@ -1390,11 +1386,9 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-ignored (entry)
   "Return ENTRY's ignore status."
-  ;; TODO: Needs an update
-  (let-alist (cdr entry)
-    (if .ignore
-        "IGNORED"
-      "")))
+  (if (plist-get (cdr entry) :ignore)
+      "IGNORED"
+    ""))
 
 (defun git-review--annotation-file-comments (entry)
   "Return ENTRY's comments status."
