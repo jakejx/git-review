@@ -96,19 +96,16 @@
     (:name reviewed :function git-review--annotation-file-reviewed :face 'font-lock-string-face)
     (:name ignored :function git-review--annotation-file-ignored :face 'font-lock-string-face)
     (:name comments :function git-review--annotation-file-comments :face 'font-lock-string-face))
-  "A list of annotations to display for a review file.
-
-Each entry in the list is a property list with the following properties:
-- :name
-- :function
-- :align
-- :face
-- :width"
+  "A list of annotations to display for a review file. "
   :group 'git-review
-  :type '(repeat (plist :options ((:name symbol)
-                                  (:function symbol)
-                                  (:align symbol)
-                                  (:face symbol)))))
+  :type 'symbol)
+
+(defcustom git-review-conversation-annotation
+  '((:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
+    (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face))
+  "A list of annotations to display for a review conversation. "
+  :group 'git-review
+  :type 'symbol)
 
 (defcustom git-review-ignore-file-predicates nil
   "A list of predicates for determining if a file should be ignored."
@@ -406,20 +403,7 @@ Each entry in the list is a property list with the following properties:
   (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
                            (save-excursion
                              (git-review--next-conversation)))))
-      (progn
-        (git-review--restore-overlays)
-        ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
-        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (git-review--conversation-start-point conversation)))
-        (save-excursion
-          (with-selected-window (git-review--control-window)
-            (let ((last-command-event ?b))
-              (ediff-jump-to-difference-at-point nil))
-            (git-review---maybe-modify-overlays)))
-        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (git-review--conversation-start-point conversation)))
-        (git-review---maybe-modify-overlays)
-        (git-review--maybe-set-reviewed))
+      (git-review--move-to-conversation conversation)
     (message "No next conversation found")))
 
 (defun git-review-previous-conversation ()
@@ -428,21 +412,23 @@ Each entry in the list is a property list with the following properties:
   (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
                            (save-excursion
                              (git-review--previous-conversation)))))
-      (progn
-        (git-review--restore-overlays)
-        ;; TODO(Niklas Eklund, 20230120): Handle comments in both sides
-        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (git-review--conversation-start-point conversation)))
-        (save-excursion
-          (with-selected-window (git-review--control-window)
-            (let ((last-command-event ?b))
-              (ediff-jump-to-difference-at-point nil))
-            (git-review---maybe-modify-overlays)))
-        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-          (goto-char (git-review--conversation-start-point conversation)))
-        (git-review---maybe-modify-overlays)
-        (git-review--maybe-set-reviewed))
+      (git-review--move-to-conversation conversation)
     (message "No previous conversation found")))
+
+(defun git-review--move-to-conversation (conversation)
+  "Move to CONVERSATION."
+  ;; TODO(Niklas Eklund, 20230131): This function doesn't work reliably
+  (git-review--restore-overlays)
+  (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+    (goto-char (git-review--conversation-start-point conversation)))
+  (with-selected-window (git-review--control-window)
+    (let ((last-command-event ?b))
+      (ediff-jump-to-difference-at-point nil))
+    (git-review---maybe-modify-overlays))
+  (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+    (goto-char (git-review--conversation-start-point conversation)))
+  (git-review---maybe-modify-overlays)
+  (git-review--maybe-set-reviewed))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
@@ -485,6 +471,20 @@ Each entry in the list is a property list with the following properties:
                                                     git-review-file-annotation))
              (file (plist-get file-info :filename)))
     (git-review--switch-file file)))
+
+(defun git-review-select-conversation ()
+  "Select a conversation."
+  (interactive)
+  ;; TODO(Niklas Eklund, 20230131): Need to implement de-duplication
+  (when-let ((candidates (seq-map (lambda (it)
+                                    `(,(plist-get it :filename ) . ,it))
+                                  git-review--conversations))
+             (conversation (git-review-completing-read candidates
+                                                       "Select conversation: "
+                                                       'git-review-conversation
+                                                       git-review-conversation-annotation)))
+    (git-review--switch-file (plist-get conversation :filename))
+    (git-review--move-to-conversation conversation)))
 
 (defun git-review--harmonize-candidate-lengths (candidates)
   "Return CANDIDATES with same length."
@@ -1358,6 +1358,14 @@ Optionally instruct function to SET-FILENAME."
                                new-str)))))
    ""))
 
+(defun git-review--annotation-conversation-starter (entry)
+  "Return the name of the user that started the conversation in ENTRY."
+  (plist-get (seq-first (plist-get (cdr entry) :comments)) :user))
+
+(defun git-review--annotation-conversation-comments (entry)
+  "Return number of comments in ENTRY."
+  (number-to-string (seq-length (plist-get (cdr entry) :comments))))
+
 (defun git-review--annotation-file-type (entry)
   "Return ENTRY's type."
   (pcase (plist-get (cdr entry) :type)
@@ -1391,6 +1399,7 @@ Optionally instruct function to SET-FILENAME."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "a") #'git-review-jump-to-a)
     (define-key map (kbd "b") #'git-review-jump-to-b)
+    (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
