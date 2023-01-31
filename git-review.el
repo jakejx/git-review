@@ -254,7 +254,8 @@ Each entry in the list is a property list with the following properties:
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
-    (git-review--store-buffer-locations)
+    ;; TODO(Niklas Eklund, 20230131): Is this needed?
+    ;; (git-review--store-buffer-locations)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -318,8 +319,9 @@ Each entry in the list is a property list with the following properties:
                                                      (git-review--current-revision)
                                                      file
                                                      file)))
-      (git-review--update-file file 'review-diff-regions base-current-regions)
-      (git-review--update-file file 'current-revision-diff-regions current-regions)
+      ;; TODO(Niklas Eklund, 20230131): Fix this
+      ;; (git-review--update-file file 'review-diff-regions base-current-regions)
+      ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
       (not
        (git-review--file-differences-intersect-p base-current-regions
                                                  current-regions)))))
@@ -553,6 +555,9 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review-submit-comments ()
   "Submit review comments."
+  ;; TODO: Consider this a submit review function. It might be
+  ;; valuable to be able to send a review even without specific file
+  ;; comments
   (interactive)
   (if (functionp git-review-submit-function)
       (progn
@@ -641,7 +646,9 @@ Each entry in the list is a property list with the following properties:
 (defun git-review-quit-comment ()
   "Quit review comment."
   (interactive)
-  (quit-restore-window (get-buffer-window (current-buffer)) 'kill))
+  (quit-restore-window
+   (get-buffer-window (current-buffer))
+   'kill))
 
 ;;;; Support functions
 
@@ -704,8 +711,37 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--is-reviewed-p (file)
   "Return t if FILE is reviewed."
-  (let-alist (git-review--file-info file)
-    (not (null .reviewed))))
+  (let ((files (plist-get git-review--patchset :files)))
+    (plist-get (seq-find (lambda (it)
+                           (equal file (plist-get it :filename)))
+                         files)
+               :reviewed)))
+
+(defun git-review--update-file (file)
+  "Update files with FILE."
+  (git-review--update-files
+   (seq-map (lambda (it)
+              (if (equal (plist-get it :filename)
+                         (plist-get file :filename))
+                  file
+                it))
+            (git-review--get-files))))
+
+(defun git-review--get-file (filename)
+  "Return file with FILENAME."
+  (seq-find (lambda (it)
+              (equal (plist-get it :filename)
+                     filename))
+            (git-review--get-files)))
+
+(defun git-review--get-files ()
+  "Return review files."
+  (plist-get git-review--patchset :files))
+
+(defun git-review--update-files (files)
+  "Update review with FILES."
+  (setq git-review--patchset
+        (plist-put git-review--patchset :files files)))
 
 (defun git-review--ignore-file-p (file)
   "Return t if FILE should be ignored."
@@ -752,19 +788,13 @@ Each entry in the list is a property list with the following properties:
         (files (plist-get git-review--patchset :files)))
     (seq-find (lambda (it) (equal (plist-get it :filename) file)) files)))
 
-(defun git-review--update-file (file key value)
-  "Update FILE with KEY and VALUE."
-  (let* ((files (let-alist git-review .files))
-         (file-info (alist-get file files nil nil #'equal)))
-    (setf (alist-get key file-info) value)
-    (setf (alist-get file files nil nil #'equal) file-info)
-    (setf (alist-get 'files git-review) files)))
-
 (defun git-review--store-buffer-locations ()
   "Store locations in review buffers for current review file."
-  (git-review--update-file (git-review--current-file) 'buffer-location
-                           `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
-                             (b . ,(with-current-buffer git-review-current-revision-buffer (point))))))
+  ;; TODO(Niklas Eklund, 20230131): Fix this
+  ;; (git-review--update-file (git-review--current-file) 'buffer-location
+  ;;                          `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
+  ;;                            (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))
+  )
 
 (defun git-review--store-progress ()
   "Store progress percentage."
@@ -819,7 +849,8 @@ Each entry in the list is a property list with the following properties:
   ;;   (git-review--remove-rebased-files-from-review))
 
   (git-review--add-metadata-to-files)
-  (git-review--add-ignore-tag-to-files))
+  ;; (git-review--add-ignore-tag-to-files)
+  )
 
 (defun git-review--generate-patchset-files (commit-hash)
   "Return a list of files in patchset with COMMIT-HASH."
@@ -1082,10 +1113,14 @@ Optionally instruct function to SET-FILENAME."
   "Set file to reviewed if the last diff has been reached."
   (when (and (not (git-review--is-reviewed-p (git-review--current-file)))
              (= (1+ ediff-current-difference) ediff-number-of-differences))
-    (git-review--update-file (git-review--current-file) 'reviewed t)
-    (git-review--store-progress)
-    (with-current-buffer (window-buffer (git-review--control-window))
-      (rename-buffer (git-review--review-buffer-name)))))
+    (git-review--update-file
+     (plist-put (git-review--get-file (git-review--current-file)) :reviewed t))
+
+    ;; TODO: Re-enable
+    ;; (git-review--store-progress)
+    ;; (with-current-buffer (window-buffer (git-review--control-window))
+    ;;   (rename-buffer (git-review--review-buffer-name)))
+    ))
 
 (defun git-review--parse-review-hunk (hunk)
   "Parse HUNK into a property list."
@@ -1349,11 +1384,9 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-file-reviewed (entry)
   "Return ENTRY's review status."
-  ;; TODO: Needs an update
-  (let-alist (cdr entry)
-    (if .reviewed
-        "REVIEWED"
-      "")))
+  (if (plist-get (cdr entry) :reviewed)
+      "REVIEWED"
+    ""))
 
 (defun git-review--annotation-file-ignored (entry)
   "Return ENTRY's ignore status."
