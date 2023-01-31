@@ -95,7 +95,7 @@
   '((:name type :function git-review--annotation-file-type :face 'font-lock-comment-face)
     (:name reviewed :function git-review--annotation-file-reviewed :face 'font-lock-string-face)
     (:name ignored :function git-review--annotation-file-ignored :face 'font-lock-string-face)
-    (:name comments :function git-review--annotation-file-comments :face 'font-lock-string-face))
+    (:name comments :function git-review--annotation-file-conversations :face 'font-lock-string-face))
   "A list of annotations to display for a review file."
   :group 'git-review
   :type 'symbol)
@@ -703,7 +703,7 @@
              `(,conversation))))))
 
 (defun git-review--update-patchsets (patchset)
-  "Update patchsets with PATCHSET."
+  "Update patch-sets with PATCHSET."
   (setq git-review--change
         (plist-put git-review--change :patchsets
                    (append (seq-remove (lambda (it)
@@ -1239,7 +1239,7 @@ Optionally instruct function to SET-FILENAME."
          (draft (plist-get last-comment :draft))
          (summary (git-review--conversation-summary conversation))
          (comment-header
-          (concat git-review-user ": " summary (when time " " time) (when draft " DRAFT") "\n")))
+          (concat (plist-get first-comment :user) ": " summary (when time " " time) (when draft " DRAFT") "\n")))
     (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
     (overlay-put ov 'git-review-overlay-type 'header)
     (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header))))
@@ -1273,9 +1273,12 @@ Optionally instruct function to SET-FILENAME."
   "Initialize overlays for conversations."
   (let* ((file-conversations (git-review--file-conversations
                               (git-review--current-file))))
-    (seq-do (lambda (conversation)
-              (git-review--add-conversation-overlays conversation))
-            file-conversations)))
+    (thread-last file-conversations
+                 (seq-filter (lambda (conversation)
+                               (equal (plist-get conversation :patchset)
+                                      (plist-get git-review--patchset :number))))
+                 (seq-do (lambda (conversation)
+                           (git-review--add-conversation-overlays conversation))))))
 
 (defun git-review--conversation-summary (conversation)
   "Return summary string for CONVERSATION."
@@ -1338,7 +1341,11 @@ Optionally instruct function to SET-FILENAME."
   "Return next conversation."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
-                             (equal (plist-get it :filename) (git-review--current-file))))
+                             (equal (plist-get it :filename)
+                                    (git-review--current-file))))
+               (seq-filter (lambda (it)
+                             (equal (plist-get it :patchset)
+                                    (plist-get git-review--patchset :number))))
                (seq-map (lambda (it)
                           (let ((start-position (git-review--conversation-start-point it)))
                             (cons (- start-position  (point)) it))))
@@ -1350,7 +1357,11 @@ Optionally instruct function to SET-FILENAME."
   "Return previous comment."
   (thread-last git-review--conversations
                (seq-filter (lambda (it)
-                             (equal (plist-get it :filename) (git-review--current-file))))
+                             (equal (plist-get it :filename)
+                                    (git-review--current-file))))
+               (seq-filter (lambda (it)
+                             (equal (plist-get it :patchset)
+                                    (plist-get git-review--patchset :number))))
                (seq-map (lambda (it)
                           (let ((start-position (git-review--conversation-start-point it)))
                             (cons (- start-position (point)) it))))
@@ -1444,11 +1455,14 @@ Optionally instruct function to SET-FILENAME."
       "IGNORED"
     ""))
 
-(defun git-review--annotation-file-comments (entry)
-  "Return ENTRY's comments status."
+(defun git-review--annotation-file-conversations (entry)
+  "Return ENTRY's conversation status."
   (if-let* ((file (plist-get (cdr entry) :filename))
             (file-conversations (git-review--file-conversations file)))
-      (format "CONVERSATIONS(%s)" (length file-conversations))
+      (format "CONVERSATIONS(%s)" (length (seq-filter (lambda (it)
+                                                        (equal (plist-get it :patchset)
+                                                               (plist-get git-review--patchset :number)))
+                                                      file-conversations)))
     ""))
 
 ;;;; Major modes
