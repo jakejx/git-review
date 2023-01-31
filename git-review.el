@@ -631,7 +631,12 @@ Each entry in the list is a property list with the following properties:
   (when-let* ((conversation (git-review--conversation-at-point)))
     (seq-do (lambda (overlay)
               (delete-overlay overlay))
-            (git-review--conversation-overlays conversation))))
+            (git-review--conversation-overlays conversation))
+    (setq git-review--conversations
+          (seq-remove (lambda (it)
+                        (equal (plist-get it :id)
+                               (plist-get conversation :id)))
+                      git-review--conversations))))
 
 (defun git-review-quit-comment ()
   "Quit review comment."
