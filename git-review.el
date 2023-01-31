@@ -477,20 +477,42 @@
 (defun git-review-select-conversation ()
   "Select a conversation."
   (interactive)
-  ;; TODO(Niklas Eklund, 20230131): Need to implement de-duplication
   ;; TODO(Niklas Eklund, 20230131): Think about how to deal with multi patchset conversations
   (when-let ((candidates (thread-last git-review--conversations
                                       (seq-filter (lambda (it)
                                                     (equal (plist-get git-review--patchset :number)
                                                            (plist-get it :patchset))))
                                       (seq-map (lambda (it)
-                                   `(,(git-review--conversation-summary it) . ,it)))))
+                                                 `(,(git-review--conversation-summary it) . ,it)))
+                                      (git-review--deduplicate-candidates)))
              (conversation (git-review-completing-read candidates
                                                        "Select conversation: "
                                                        'git-review-conversation
                                                        git-review-conversation-annotation)))
     (git-review--switch-file (plist-get conversation :filename))
     (git-review--move-to-conversation conversation)))
+
+(defun git-review--deduplicate-candidates (candidates)
+  "De-duplicate CANDIDATES."
+  (let* ((ht (make-hash-table :test #'equal :size (seq-length candidates)))
+         (occurences
+          (thread-last candidates
+                       (seq-group-by #'car)
+                       (seq-map (lambda (it) (seq-length (cdr it))))
+                       (seq-max)))
+         (identifier-width (if (> occurences 1)
+                               (+ (length (number-to-string occurences)) 3)
+                             0)))
+    (thread-last (seq-reverse candidates)
+                 (seq-do (lambda (candidate)
+                           (if-let (count (gethash (car candidate) ht))
+                               (setcar candidate (format "%s%s" (car candidate)
+                                                         (truncate-string-to-width
+                                                          (propertize (format " (%s)" (puthash (car candidate) (1+ count) ht)) 'face 'font-lock-comment-face)
+                                                          identifier-width 0 ?\s)))
+                             (puthash (car candidate) 0 ht)
+                             (setcar candidate (format "%s%s" (car candidate) (make-string identifier-width ?\s))))))
+                 (seq-reverse))))
 
 (defun git-review--harmonize-candidate-lengths (candidates)
   "Return CANDIDATES with same length."
