@@ -429,8 +429,7 @@
     (git-review---maybe-modify-overlays))
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
     (goto-char (git-review--conversation-start-point conversation)))
-  (git-review---maybe-modify-overlays)
-  (git-review--maybe-set-reviewed))
+  (git-review---maybe-modify-overlays))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
@@ -495,13 +494,14 @@
 (defun git-review--deduplicate-candidates (candidates)
   "De-duplicate CANDIDATES."
   (let* ((ht (make-hash-table :test #'equal :size (seq-length candidates))))
-    (thread-last (seq-reverse candidates)
+    (thread-last candidates
                  (seq-do (lambda (candidate)
-                           (if-let (count (gethash (car candidate) ht))
-                               (setcar candidate (concat (car candidate)
-                                                         (propertize (format " (%s)" (puthash (car candidate) (1+ count) ht)) 'face 'font-lock-comment-face)))
-                             (puthash (car candidate) 0 ht))))
-                 (seq-reverse))))
+                           (if-let* ((str (car candidate))
+                                     (count (gethash str ht))
+                                     (identifier (propertize
+                                                  (format " (%s)" (puthash str (1+ count) ht)) 'face 'font-lock-comment-face)))
+                               (setcar candidate (concat str identifier))
+                             (puthash (car candidate) 0 ht)))))))
 
 (defun git-review--harmonize-candidate-lengths (candidates)
   "Return CANDIDATES with same length."
@@ -670,11 +670,19 @@
 
 (defun git-review--update-conversation-comment (conversation comment)
   "Update CONVERSATION with COMMENT."
-  (plist-put conversation :comments
-             (append (seq-remove (lambda (it)
-                                   (equal (plist-get it :id) (plist-get comment :id)))
-                                 (plist-get conversation :comments))
-                     `(,comment))))
+  (let* ((found-comment)
+         (comments (seq-map (lambda (it)
+                              (if (equal (plist-get it :id) (plist-get comment :id))
+                                  (progn
+                                    (setq found-comment t)
+                                    comment)
+                                it))
+                            (plist-get conversation :comments))))
+    (plist-put conversation :comments
+               (if found-comment
+                   comments
+                 (append comments
+                         `(,comment))))))
 
 (defun git-review--update-conversations (conversation)
   "Update conversations with CONVERSATION."
