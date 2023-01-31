@@ -136,6 +136,7 @@
 (defvar git-review--change nil "The current change.")
 (defvar git-review--patchset nil "The current patchset.")
 (defvar git-review--conversations nil "List of conversations.")
+(defvar git-review--files nil "List of files.")
 
 (defvar-local git-review--current-comment nil)
 (defvar-local git-review--current-conversation nil)
@@ -853,7 +854,9 @@
 
     (unless git-review--change
       (setq git-review--change `(:id ,git-review-change
-                                     :current-patchset ,git-review-patchset))
+                                     :current-patchset ,git-review-patchset
+                                     :conversations nil
+                                     :files nil))
       (setq git-review--conversations nil))
 
     (unless git-review--patchset
