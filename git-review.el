@@ -96,14 +96,15 @@
     (:name reviewed :function git-review--annotation-file-reviewed :face 'font-lock-string-face)
     (:name ignored :function git-review--annotation-file-ignored :face 'font-lock-string-face)
     (:name comments :function git-review--annotation-file-comments :face 'font-lock-string-face))
-  "A list of annotations to display for a review file. "
+  "A list of annotations to display for a review file."
   :group 'git-review
   :type 'symbol)
 
 (defcustom git-review-conversation-annotation
   '((:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
-    (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face))
-  "A list of annotations to display for a review conversation. "
+    (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face)
+    (:name resolved :function git-review--annotation-conversation-resolved :face 'font-lock-string-face))
+  "A list of annotations to display for a review conversation."
   :group 'git-review
   :type 'symbol)
 
@@ -1182,6 +1183,7 @@ Optionally instruct function to SET-FILENAME."
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
           :filename ,(git-review--current-file)
+          :resolved nil
           :location ,location
           :side ,side)))
 
@@ -1365,6 +1367,12 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-conversation-comments (entry)
   "Return number of comments in ENTRY."
   (number-to-string (seq-length (plist-get (cdr entry) :comments))))
+
+(defun git-review--annotation-conversation-resolved (entry)
+  "Return DONE if conversation in ENTRY is resolved."
+  (if (plist-get (cdr entry) :resolved)
+      "DONE"
+    ""))
 
 (defun git-review--annotation-file-type (entry)
   "Return ENTRY's type."
