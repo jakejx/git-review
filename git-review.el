@@ -189,7 +189,10 @@
 (defun git-review--update-review ()
   "Update change(s) with change."
   (git-review--update-patchsets git-review--patchset)
-  (setq git-review--change (plist-put git-review--change :conversations git-review--conversations))
+  (setq git-review--change (plist-put git-review--change :conversations
+                                      (seq-remove (lambda (it)
+                                                    (plist-get it :remote))
+                                                  git-review--conversations)))
   (setq git-review--changes
         (append (seq-remove (lambda (it)
                               (equal (plist-get it :id)
