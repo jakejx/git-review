@@ -686,11 +686,21 @@
 
 (defun git-review--update-conversations (conversation)
   "Update conversations with CONVERSATION."
-  (setq git-review--conversations
-        (append (seq-remove (lambda (it)
-                              (equal (plist-get it :id) (plist-get conversation :id)))
-                            git-review--conversations)
-                `(,conversation))))
+  (let* ((found-conversation)
+         (conversations
+          (seq-map (lambda (it)
+                     (if (equal (plist-get it :id) (plist-get conversation :id))
+                         (progn
+                           (setq found-conversation t)
+                           conversation)
+                       it))
+                   git-review--conversations)))
+    (setq git-review--conversations
+          (if found-conversation
+              conversations
+            (append
+             conversations
+             `(,conversation))))))
 
 (defun git-review--update-patchsets (patchset)
   "Update patchsets with PATCHSET."
@@ -698,9 +708,9 @@
         (plist-put git-review--change :patchsets
                    (append (seq-remove (lambda (it)
                                          (equal (plist-get it :id)
-                                                (plist-get git-review--patchset :id)))
+                                                (plist-get patchset :id)))
                                        (plist-get git-review--change :patchsets))
-                           `(,git-review--patchset)))))
+                           `(,patchset)))))
 
 (defun git-review--conversation-overlays (conversation)
   "Return overlays associated with CONVERSATION."
