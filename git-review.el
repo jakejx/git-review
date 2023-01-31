@@ -342,8 +342,7 @@
       (progn
         (make-frame-invisible git-review--conversation-frame t)
         (kill-buffer "*git-review-conversation*"))
-    (when-let* ((conversation (git-review--conversation-at-point))
-                (comment (seq-first (plist-get conversation :comments))))
+    (when-let* ((conversation (git-review--conversation-at-point)))
       (let* ((parent-frame (window-frame))
              (child-frame (make-frame
                            `((parent-frame . ,parent-frame)
@@ -364,12 +363,15 @@
           (let ((inhibit-read-only t))
             (erase-buffer)
             (git-review-conversation-mode)
-            (insert (propertize (format "%s:\n" (plist-get comment :user)) 'face 'org-block-begin-line))
-            (insert (with-temp-buffer
-                      (insert (plist-get comment :message))
-                      (gfm-view-mode)
-                      (font-lock-ensure)
-                      (buffer-substring (point-min) (point-max))))
+            (seq-do (lambda (comment)
+                      (insert (propertize (format "%s:\n" (plist-get comment :user)) 'face 'org-block-begin-line))
+                      (insert (with-temp-buffer
+                                (insert (plist-get comment :message))
+                                (gfm-view-mode)
+                                (font-lock-ensure)
+                                (buffer-substring (point-min) (point-max))))
+                      (insert "\n"))
+                    (plist-get conversation :comments))
             (goto-char (point-min)))
           (setq line-count (count-lines (point-min) (point-max) 'ignore-invisible-lines)))
         (set-window-buffer window buffer)
