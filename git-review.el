@@ -775,7 +775,14 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--progress ()
   "Return review progress."
-  (or (let-alist git-review .progress) 0.0))
+  (if-let* ((files (seq-remove (lambda (it)
+                                 (plist-get it :ignore))
+                               (git-review--get-files)))
+            (reviewed-files (seq-filter (lambda (it)
+                                          (plist-get it :reviewed))
+                                        files)))
+      (/ (float (length reviewed-files)) (length files))
+    0.0))
 
 (defun git-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
@@ -795,24 +802,6 @@ Each entry in the list is a property list with the following properties:
   ;;                          `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
   ;;                            (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))
   )
-
-(defun git-review--store-progress ()
-  "Store progress percentage."
-  (let ((progress (let-alist git-review
-                    (/
-                     (thread-last .files
-                                  (seq-map #'cdr)
-                                  (seq-filter (lambda (it)
-                                                (let-alist it
-                                                  (and .reviewed
-                                                       (not .ignore)))))
-                                  (length)
-                                  (float))
-                     (thread-last .files
-                                  (seq-remove (lambda (it)
-                                                (let-alist it .ignore)))
-                                  (length))))))
-    (setf (alist-get 'progress git-review) progress)))
 
 (defun git-review--initialize-review ()
   "Initialize review."
@@ -1111,12 +1100,8 @@ Optionally instruct function to SET-FILENAME."
              (= (1+ ediff-current-difference) ediff-number-of-differences))
     (git-review--update-file
      (plist-put (git-review--get-file (git-review--current-file)) :reviewed t))
-
-    ;; TODO: Re-enable
-    ;; (git-review--store-progress)
-    ;; (with-current-buffer (window-buffer (git-review--control-window))
-    ;;   (rename-buffer (git-review--review-buffer-name)))
-    ))
+    (with-current-buffer (window-buffer (git-review--control-window))
+      (rename-buffer (git-review--review-buffer-name)))))
 
 (defun git-review--parse-review-hunk (hunk)
   "Parse HUNK into a property list."
