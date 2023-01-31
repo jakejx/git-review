@@ -248,14 +248,13 @@ Each entry in the list is a property list with the following properties:
              (default-directory (project-root (project-current))))
     (ediff-buffers git-review-base-revision-buffer git-review-current-revision-buffer)
     (git-review--init-conversation-overlays)
-    (git-review--restore-buffer-location)))
+    (git-review--restore-buffer-location (git-review--get-file (git-review--current-file)))))
 
 (defun git-review-close-review-file ()
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
-    ;; TODO(Niklas Eklund, 20230131): Is this needed?
-    ;; (git-review--store-buffer-locations)
+    (git-review--store-buffer-locations)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -797,11 +796,10 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--store-buffer-locations ()
   "Store locations in review buffers for current review file."
-  ;; TODO(Niklas Eklund, 20230131): Fix this
-  ;; (git-review--update-file (git-review--current-file) 'buffer-location
-  ;;                          `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
-  ;;                            (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))
-  )
+  (git-review--update-file
+   (plist-put (git-review--get-file (git-review--current-file)) :buffer-location
+              `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
+                (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))))
 
 (defun git-review--initialize-review ()
   "Initialize review."
@@ -921,25 +919,26 @@ Each entry in the list is a property list with the following properties:
                                    (plist-get change :patchsets))))
       (setq git-review--patchset patchset))))
 
-(defun git-review--restore-buffer-location ()
-  "Restore buffer location to nearest diff in revision buffer.
+(defun git-review--restore-buffer-location (file)
+  "Restore buffer location in FILE.
 
 This is done for files that has already been reviewed before and where
 there is a previous location to return to."
-  (let-alist (git-review--file-info)
-    (if (and .buffer-location
-                                        ; `ediff' complains when location is at start of buffer
-             (> .buffer-location.b 1))
-        (progn
-          (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-            (goto-char .buffer-location.b))
-          (with-selected-window (git-review--control-window)
-            (let ((last-command-event ?b))
-              (ediff-jump-to-difference-at-point nil))
-            (git-review---maybe-modify-overlays)))
-      (with-selected-window (git-review--control-window)
-        (ediff-next-difference)
-        (git-review--maybe-set-reviewed)))))
+  (if-let* ((location (plist-get file :buffer-location)))
+      (progn
+        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+          (goto-char (alist-get 'b location)))
+        (with-selected-window (git-review--control-window)
+          (let ((last-command-event ?b))
+            (ediff-jump-to-difference-at-point nil))
+          (git-review---maybe-modify-overlays))
+        (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+          (goto-char (alist-get 'b location)))
+        (with-selected-window (get-buffer-window git-review-base-revision-buffer)
+          (goto-char (alist-get 'a location))))
+    (with-selected-window (git-review--control-window)
+      (ediff-next-difference)
+      (git-review--maybe-set-reviewed))))
 
 (defun git-review--control-window ()
   "Return window for variable `ediff-control-buffer'."
