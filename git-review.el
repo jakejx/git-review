@@ -104,6 +104,7 @@
   '((:name file :function git-review--annotation-conversation-file :face 'font-lock-string-face)
     (:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
     (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face)
+    (:name draft :function git-review--annotation-conversation-draft :face 'font-lock-string-face)
     (:name resolved :function git-review--annotation-conversation-resolved :face 'font-lock-string-face))
   "A list of annotations to display for a review conversation."
   :group 'git-review
@@ -1426,6 +1427,13 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-conversation-file (entry)
   "Return the name of the file the conversation in ENTRY."
   (plist-get (cdr entry) :filename))
+
+(defun git-review--annotation-conversation-draft (entry)
+  "Return draft status on conversation in ENTRY."
+  (let ((last-comment (car (last (plist-get (cdr entry) :comments)))))
+    (if (plist-get last-comment :draft)
+        "DRAFT"
+      "")))
 
 (defun git-review--annotation-conversation-comments (entry)
   "Return number of replies to conversation in ENTRY."
