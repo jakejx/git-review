@@ -494,24 +494,13 @@
 
 (defun git-review--deduplicate-candidates (candidates)
   "De-duplicate CANDIDATES."
-  (let* ((ht (make-hash-table :test #'equal :size (seq-length candidates)))
-         (occurences
-          (thread-last candidates
-                       (seq-group-by #'car)
-                       (seq-map (lambda (it) (seq-length (cdr it))))
-                       (seq-max)))
-         (identifier-width (if (> occurences 1)
-                               (+ (length (number-to-string occurences)) 3)
-                             0)))
+  (let* ((ht (make-hash-table :test #'equal :size (seq-length candidates))))
     (thread-last (seq-reverse candidates)
                  (seq-do (lambda (candidate)
                            (if-let (count (gethash (car candidate) ht))
-                               (setcar candidate (format "%s%s" (car candidate)
-                                                         (truncate-string-to-width
-                                                          (propertize (format " (%s)" (puthash (car candidate) (1+ count) ht)) 'face 'font-lock-comment-face)
-                                                          identifier-width 0 ?\s)))
-                             (puthash (car candidate) 0 ht)
-                             (setcar candidate (format "%s%s" (car candidate) (make-string identifier-width ?\s))))))
+                               (setcar candidate (concat (car candidate)
+                                                         (propertize (format " (%s)" (puthash (car candidate) (1+ count) ht)) 'face 'font-lock-comment-face)))
+                             (puthash (car candidate) 0 ht))))
                  (seq-reverse))))
 
 (defun git-review--harmonize-candidate-lengths (candidates)
