@@ -818,10 +818,8 @@ Each entry in the list is a property list with the following properties:
   ;; (when multiple-patchsets
   ;;   (git-review--remove-rebased-files-from-review))
 
-  ;; TODO(Niklas Eklund, 20230127): Add back metadata tags
-  ;; (git-review--add-metadata-to-files)
-  ;; (git-review--add-ignore-tag-to-files)
-  )
+  (git-review--add-metadata-to-files)
+  (git-review--add-ignore-tag-to-files))
 
 (defun git-review--generate-patchset-files (commit-hash)
   "Return a list of files in patchset with COMMIT-HASH."
@@ -849,19 +847,26 @@ Each entry in the list is a property list with the following properties:
 
 (defun git-review--add-ignore-tag-to-files ()
   "Add ignore tag to files that should be ignored in variable `git-review'."
-  ;; TODO: Make it work
-  (seq-do (lambda (file)
-            (when (git-review--ignore-file-p file)
-              (git-review--update-file file 'ignore t)))
-          (git-review--files)))
+  (let ((files (plist-get git-review--patchset :files)))
+    (setq git-review--patchset
+          (plist-put git-review--patchset :files
+                     (seq-map (lambda (it)
+                                (if (git-review--ignore-file-p (plist-get it :filename))
+                                    (plist-put it :ignore t)
+                                  it))
+                              files)))))
 
 (defun git-review--add-metadata-to-files ()
-  "Add metadata to files in variable `git-review'."
-  ;; TODO: Make it work
-  (seq-do (lambda (file)
-            (when-let ((metadata (git-review--file-metadata file)))
-              (git-review--update-file file 'metadata metadata)))
-          (git-review--files)))
+  "Add metadata to files in variable `git-review--patchset'."
+  (let ((files (plist-get git-review--patchset :files)))
+    (setq git-review--patchset
+          (plist-put git-review--patchset :files
+                     (seq-map (lambda (it)
+                                (if-let ((metadata (git-review--file-metadata
+                                                    (plist-get it :filename))))
+                                    (plist-put it :metadata metadata)
+                                  it))
+                              files)))))
 
 (defun git-review--remove-rebased-files-from-review ()
   "Remove rebased files in variable `git-review'."
