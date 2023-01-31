@@ -101,7 +101,8 @@
   :type 'symbol)
 
 (defcustom git-review-conversation-annotation
-  '((:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
+  '((:name file :function git-review--annotation-conversation-file :face 'font-lock-string-face)
+    (:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
     (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face)
     (:name resolved :function git-review--annotation-conversation-resolved :face 'font-lock-string-face))
   "A list of annotations to display for a review conversation."
@@ -477,9 +478,13 @@
   "Select a conversation."
   (interactive)
   ;; TODO(Niklas Eklund, 20230131): Need to implement de-duplication
-  (when-let ((candidates (seq-map (lambda (it)
-                                    `(,(plist-get it :filename ) . ,it))
-                                  git-review--conversations))
+  ;; TODO(Niklas Eklund, 20230131): Think about how to deal with multi patchset conversations
+  (when-let ((candidates (thread-last git-review--conversations
+                                      (seq-filter (lambda (it)
+                                                    (equal (plist-get git-review--patchset :number)
+                                                           (plist-get it :patchset))))
+                                      (seq-map (lambda (it)
+                                   `(,(git-review--conversation-summary it) . ,it)))))
              (conversation (git-review-completing-read candidates
                                                        "Select conversation: "
                                                        'git-review-conversation
@@ -1182,6 +1187,7 @@ Optionally instruct function to SET-FILENAME."
             (end-column . ,(save-excursion (goto-char end-position) (current-column)))))
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
+          :patchset ,(plist-get git-review--patchset :number)
           :filename ,(git-review--current-file)
           :resolved nil
           :location ,location
@@ -1201,12 +1207,10 @@ Optionally instruct function to SET-FILENAME."
          (last-comment (car (last (plist-get conversation :comments))))
          (time (when (plist-get first-comment :timestamp)
                  (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get first-comment :timestamp))))
-         (comment-message (plist-get first-comment :message))
-         (summary (seq-elt (split-string comment-message "\n") 0))
          (draft (plist-get last-comment :draft))
-         (summary-str (truncate-string-to-width summary 30))
+         (summary (git-review--conversation-summary conversation))
          (comment-header
-          (concat git-review-user ": " summary-str (when (> (length summary) 30) "...") (when time " " time) (when draft " DRAFT") "\n")))
+          (concat git-review-user ": " summary (when time " " time) (when draft " DRAFT") "\n")))
     (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
     (overlay-put ov 'git-review-overlay-type 'header)
     (overlay-put ov 'before-string (propertize comment-header 'face 'git-review-comment-header))))
@@ -1243,6 +1247,16 @@ Optionally instruct function to SET-FILENAME."
     (seq-do (lambda (conversation)
               (git-review--add-conversation-overlays conversation))
             file-conversations)))
+
+(defun git-review--conversation-summary (conversation)
+  "Return summary string for CONVERSATION."
+  (let* ((max-length 30)
+         (first-comment (seq-first (plist-get conversation :comments)))
+         (summary (seq-elt (split-string (plist-get first-comment :message) "\n") 0))
+         (summary-str (truncate-string-to-width summary max-length)))
+    (if (> (length summary) max-length)
+        (concat summary-str "...")
+      summary-str)))
 
 (defun git-review--conversation-start-point (conversation)
   "Return start point of CONVERSATION."
@@ -1364,9 +1378,16 @@ Optionally instruct function to SET-FILENAME."
   "Return the name of the user that started the conversation in ENTRY."
   (plist-get (seq-first (plist-get (cdr entry) :comments)) :user))
 
+(defun git-review--annotation-conversation-file (entry)
+  "Return the name of the file the conversation in ENTRY."
+  (plist-get (cdr entry) :filename))
+
 (defun git-review--annotation-conversation-comments (entry)
-  "Return number of comments in ENTRY."
-  (number-to-string (seq-length (plist-get (cdr entry) :comments))))
+  "Return number of replies to conversation in ENTRY."
+  (let ((num-comments (seq-length (plist-get (cdr entry) :comments))))
+    (if (> num-comments 1)
+        (format "REPLIES(%s)" (- num-comments 1))
+      "")))
 
 (defun git-review--annotation-conversation-resolved (entry)
   "Return DONE if conversation in ENTRY is resolved."
