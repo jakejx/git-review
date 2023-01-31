@@ -1154,12 +1154,16 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--review-buffer-name ()
   "Return the name of the review buffer."
-  (let* ((review-files (thread-last (git-review--files)
-                                    (seq-remove #'git-review--ignore-file-p)))
+  (let* ((review-files (thread-last (git-review--get-files)
+                                    (seq-remove (lambda (it)
+                                                  (plist-get it :ignore)))))
+         (file (git-review--get-file (git-review--current-file)))
          (file-index
-          (if (git-review--ignore-file-p (git-review--current-file))
+          (if (plist-get file :ignore)
               "_"
-            (seq-position review-files (git-review--current-file))))
+            (seq-position review-files file (lambda (a b)
+                                              (equal (plist-get a :filename)
+                                                     (plist-get b :filename))))))
          (number-of-files (1- (seq-length review-files)))
          (progress (* (git-review--progress) 100)))
     (format "*Git Review: [%s/%s] %s%%*"
