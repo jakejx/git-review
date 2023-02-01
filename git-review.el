@@ -435,7 +435,6 @@
 
 (defun git-review--move-to-conversation (conversation)
   "Move to CONVERSATION."
-  ;; TODO(Niklas Eklund, 20230131): This function doesn't work reliably
   (git-review--restore-overlays)
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
     (goto-char (git-review--conversation-start-point conversation)))
@@ -444,6 +443,8 @@
       (ediff-jump-to-difference-at-point nil))
     (git-review---maybe-modify-overlays))
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+    (goto-char (git-review--conversation-start-point conversation)))
+  (with-selected-window (get-buffer-window git-review-base-revision-buffer)
     (goto-char (git-review--conversation-start-point conversation)))
   (git-review---maybe-modify-overlays))
 
