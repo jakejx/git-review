@@ -1209,7 +1209,8 @@ Optionally instruct function to SET-FILENAME."
                                                      (plist-get b :filename))))))
          (number-of-files (1- (seq-length review-files)))
          (progress (* (git-review--progress) 100)))
-    (format "*Git Review: [%s/%s] %s%%*"
+    (format "*Git Review: %s [%s/%s] %s%%*"
+            (format "PS%s" (plist-get git-review--patchset :number))
             file-index
             number-of-files
             progress)))
