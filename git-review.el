@@ -1320,21 +1320,51 @@ Optionally instruct function to SET-FILENAME."
         (concat summary-str "...")
       summary-str)))
 
+(defun git-review--conversation-buffer (conversation)
+  "Return buffer associated with CONVERSATION."
+  (if (eq 'a (plist-get conversation :side))
+          git-review-base-revision-buffer
+          git-review-current-revision-buffer))
+
+(defun git-review--file-next-conversation (file)
+  "Return next conversation in FILE."
+  (let ((conversations (git-review--file-conversations file))
+        (position (with-current-buffer git-review-current-revision-buffer
+                    (point))))
+    (thread-last conversations
+                 (seq-map (lambda (it) `(,(- (git-review--conversation-start-point it) position) . ,it)))
+                 (seq-sort-by (lambda (it) (car it)) #'<)
+                 (seq-find (lambda (it) (> (car it) 0)))
+                 (cdr))))
+
+(defun git-review--file-previous-conversation (file)
+  "Return next conversation in FILE."
+  (let ((conversations (git-review--file-conversations file))
+        (position (with-current-buffer git-review-current-revision-buffer
+                    (point))))
+    (thread-last conversations
+                 (seq-map (lambda (it) `(,(- (git-review--conversation-start-point it) position) . ,it)))
+                 (seq-sort-by (lambda (it) (car it)) #'>)
+                 (seq-find (lambda (it) (< (car it) 0)))
+                 (cdr))))
+
 (defun git-review--conversation-start-point (conversation)
   "Return start point of CONVERSATION."
-  (let-alist (plist-get conversation :location)
-    (save-excursion (goto-char (point-min))
-                    (forward-line .end-line)
-                    (move-to-column .start-column)
-                    (point))))
+  (with-current-buffer (git-review--conversation-buffer conversation)
+    (let-alist (plist-get conversation :location)
+      (save-excursion (goto-char (point-min))
+                      (forward-line .end-line)
+                      (move-to-column .start-column)
+                      (point)))))
 
 (defun git-review--conversation-end-point (conversation)
   "Return end point of CONVERSATION."
-  (let-alist (plist-get conversation :location)
-    (save-excursion (goto-char (point-min))
-                    (forward-line .end-line)
-                    (move-to-column .end-column)
-                    (point))))
+  (with-current-buffer (git-review--conversation-buffer conversation)
+    (let-alist (plist-get conversation :location)
+      (save-excursion (goto-char (point-min))
+                      (forward-line .end-line)
+                      (move-to-column .end-column)
+                      (point)))))
 
 (defun git-review--file-conversations (file)
   "Return conversations on FILE."
@@ -1369,35 +1399,13 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--next-conversation ()
   "Return next conversation."
-  (thread-last (git-review--get-conversations)
-               (seq-filter (lambda (it)
-                             (equal (plist-get it :filename)
-                                    (git-review--current-file))))
-               (seq-filter (lambda (it)
-                             (equal (plist-get it :patchset)
-                                    (plist-get git-review--patchset :number))))
-               (seq-map (lambda (it)
-                          (let ((start-position (git-review--conversation-start-point it)))
-                            (cons (- start-position  (point)) it))))
-               (seq-sort-by (lambda (it) (car it)) #'<)
-               (seq-find (lambda (it) (> (car it) 0)))
-               (cdr)))
+  ;; TODO: Make it possible to find next conversation in other file
+  (git-review--file-next-conversation (git-review--current-file)))
 
 (defun git-review--previous-conversation ()
   "Return previous comment."
-  (thread-last (git-review--get-conversations)
-               (seq-filter (lambda (it)
-                             (equal (plist-get it :filename)
-                                    (git-review--current-file))))
-               (seq-filter (lambda (it)
-                             (equal (plist-get it :patchset)
-                                    (plist-get git-review--patchset :number))))
-               (seq-map (lambda (it)
-                          (let ((start-position (git-review--conversation-start-point it)))
-                            (cons (- start-position (point)) it))))
-               (seq-sort-by (lambda (it) (car it)) #'<)
-               (seq-find (lambda (it) (< (car it) 0)))
-               (cdr)))
+  ;; TODO: Make it possible to find next conversation in other file
+  (git-review--file-previous-conversation (git-review--current-file)))
 
 (defun git-review--annotations (candidates)
   "Return annotations of CANDIDATES."
