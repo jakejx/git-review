@@ -148,6 +148,7 @@
 
 (defvar git-review--conversation-frame nil)
 
+(defvar git-review--hide-other-conversations nil)
 ;;;; Faces
 
 (defgroup git-review-faces nil
@@ -330,6 +331,14 @@
                                                  current-regions)))))
 
 ;;;; Commands
+
+(defun git-review-toggle-hide-conversations ()
+  "Toggle to hide all conversations with others."
+  (interactive)
+  (setq git-review--hide-other-conversations
+        (not git-review--hide-other-conversations))
+  (when git-review--hide-other-conversations
+    (git-review-file)))
 
 (defun git-review-open-patchset-diff ()
   "Open diff buffer with patch-set."
@@ -777,7 +786,14 @@
 
 (defun git-review--get-conversations ()
   "Return conversations."
-  git-review--conversations)
+  (if git-review--hide-other-conversations
+      (seq-filter (lambda (it)
+                    (let ((comments (plist-get it :comments)))
+                      (and (= (length comments) 1)
+                           (string= (plist-get (car comments) :user)
+                                    git-review-user))))
+                  git-review--conversations)
+    git-review--conversations))
 
 (defun git-review--get-files ()
   "Return review files."
@@ -1492,6 +1508,7 @@ Optionally instruct function to SET-FILENAME."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "a") #'git-review-jump-to-a)
     (define-key map (kbd "b") #'git-review-jump-to-b)
+    (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
     (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
