@@ -443,10 +443,11 @@
       (ediff-jump-to-difference-at-point nil))
     (git-review---maybe-modify-overlays))
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-    (goto-char (git-review--conversation-start-point conversation)))
+    (goto-char (git-review--conversation-start-point conversation))
+    (recenter))
   (with-selected-window (get-buffer-window git-review-base-revision-buffer)
-    (goto-char (git-review--conversation-start-point conversation)))
-  (git-review---maybe-modify-overlays))
+    (goto-char (git-review--conversation-start-point conversation))
+    (recenter)))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
