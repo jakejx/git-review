@@ -484,7 +484,7 @@
   "Select a conversation."
   (interactive)
   ;; TODO(Niklas Eklund, 20230131): Think about how to deal with multi patchset conversations
-  (when-let ((candidates (thread-last git-review--conversations
+  (when-let ((candidates (thread-last (git-review--get-conversations)
                                       (seq-filter (lambda (it)
                                                     (equal (plist-get git-review--patchset :number)
                                                            (plist-get it :patchset))))
@@ -774,6 +774,10 @@
               (equal (plist-get it :filename)
                      filename))
             (git-review--get-files)))
+
+(defun git-review--get-conversations ()
+  "Return conversations."
+  git-review--conversations)
 
 (defun git-review--get-files ()
   "Return review files."
@@ -1320,7 +1324,7 @@ Optionally instruct function to SET-FILENAME."
   "Return conversations on FILE."
   (seq-filter (lambda (it)
                 (equal (plist-get it :filename) file))
-              git-review--conversations))
+              (git-review--get-conversations)))
 
 (defun git-review--next-file ()
   "Return next file."
@@ -1349,7 +1353,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--next-conversation ()
   "Return next conversation."
-  (thread-last git-review--conversations
+  (thread-last (git-review--get-conversations)
                (seq-filter (lambda (it)
                              (equal (plist-get it :filename)
                                     (git-review--current-file))))
@@ -1365,7 +1369,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--previous-conversation ()
   "Return previous comment."
-  (thread-last git-review--conversations
+  (thread-last (git-review--get-conversations)
                (seq-filter (lambda (it)
                              (equal (plist-get it :filename)
                                     (git-review--current-file))))
