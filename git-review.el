@@ -420,20 +420,26 @@
 (defun git-review-next-conversation ()
   "Go to next conversation."
   (interactive)
-  (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-                           (save-excursion
-                             (git-review--next-conversation)))))
+  (if-let ((conversation (git-review--file-next-conversation
+                          (git-review--current-file))))
       (git-review--move-to-conversation conversation)
-    (message "No next conversation found")))
+    (if-let ((conversation (git-review--next-conversation-file
+                            (git-review--current-file))))
+        (progn (git-review--switch-file (plist-get conversation :filename))
+               (git-review--move-to-conversation conversation))
+      (message "No next conversation found"))))
 
 (defun git-review-previous-conversation ()
   "Go to previous conversation."
   (interactive)
-  (if-let ((conversation (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-                           (save-excursion
-                             (git-review--previous-conversation)))))
+  (if-let ((conversation (git-review--file-previous-conversation
+                          (git-review--current-file))))
       (git-review--move-to-conversation conversation)
-    (message "No previous conversation found")))
+    (if-let ((conversation (git-review--previous-conversation-file
+                            (git-review--current-file))))
+        (progn (git-review--switch-file (plist-get conversation :filename))
+               (git-review--move-to-conversation conversation))
+      (message "No previous conversation found"))))
 
 (defun git-review--move-to-conversation (conversation)
   "Move to CONVERSATION."
@@ -469,16 +475,18 @@
 (defun git-review-next-file ()
   "Review next file."
   (interactive)
-  (if-let ((next-file (git-review--next-file)))
+  (if-let ((next-file (git-review--next-file (git-review--current-file))))
       (git-review--switch-file next-file)
-    (message "No next file")))
+    (message "No next file")
+    nil))
 
 (defun git-review-previous-file ()
   "Review previous file."
   (interactive)
-  (if-let ((previous-file (git-review--previous-file)))
+  (if-let ((previous-file (git-review--previous-file (git-review--current-file))))
       (git-review--switch-file previous-file)
-    (message "No previous file")))
+    (message "No previous file")
+    nil))
 
 (defun git-review-select-file ()
   "Select a file to review."
@@ -1360,6 +1368,22 @@ Optionally instruct function to SET-FILENAME."
           git-review-base-revision-buffer
           git-review-current-revision-buffer))
 
+(defun git-review--next-conversation-file (file)
+  "Return the next file after FILE with conversation(s)."
+  (let ((conversation))
+    (while (setq file (git-review--next-file file))
+      (when-let ((conversations (git-review--file-conversations file)))
+        (setq conversation (seq-first conversations))))
+    conversation))
+
+(defun git-review--previous-conversation-file (file)
+  "Return the previous file before FILE with conversation(s)."
+  (let ((conversation))
+    (while (setq file (git-review--previous-file file))
+      (when-let ((conversations (git-review--file-conversations file)))
+        (setq conversation (seq-first conversations))))
+    conversation))
+
 (defun git-review--file-next-conversation (file)
   "Return next conversation in FILE."
   (let ((conversations (git-review--file-conversations file))
@@ -1406,25 +1430,25 @@ Optionally instruct function to SET-FILENAME."
                 (equal (plist-get it :filename) file))
               (git-review--get-conversations)))
 
-(defun git-review--next-file ()
-  "Return next file."
+(defun git-review--next-file (file)
+  "Return next file after FILE."
   (thread-last (plist-get git-review--patchset :files)
                (seq-drop-while (lambda (it)
                                  (not (string= (plist-get it :filename)
-                                               (git-review--current-file)))))
+                                               file))))
                (seq-rest)
                (seq-find (lambda (it)
                            (not (plist-get it :ignore))))
                (funcall (lambda (it)
                           (plist-get it :filename)))))
 
-(defun git-review--previous-file ()
-  "Return previous file."
+(defun git-review--previous-file (file)
+  "Return previous file before FILE."
   (thread-last (plist-get git-review--patchset :files)
                (seq-take-while (lambda (it)
                                  (let-alist it
                                    (not (string= (plist-get it :filename)
-                                                 (git-review--current-file))))))
+                                                 file)))))
                (nreverse)
                (seq-find (lambda (it)
                            (not (plist-get it :ignore))))
