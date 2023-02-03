@@ -91,6 +91,12 @@
   "Return file-name of ENTRY."
   (car entry))
 
+(defcustom git-review-patchset-annotation
+  '((:name type :function (lambda (_) "TEST") :face 'font-lock-comment-face))
+  "A list of annotations to display for a review file."
+  :group 'git-review
+  :type 'symbol)
+
 (defcustom git-review-file-annotation
   '((:name type :function git-review--annotation-file-type :face 'font-lock-comment-face)
     (:name reviewed :function git-review--annotation-file-reviewed :face 'font-lock-string-face)
@@ -192,16 +198,12 @@
 (defun git-review--update-review ()
   "Update change(s) with change."
   (git-review--update-patchsets git-review--patchset)
+  ;; Remove remote conversations from local storage
   (setq git-review--change (plist-put git-review--change :conversations
                                       (seq-remove (lambda (it)
                                                     (plist-get it :remote))
                                                   git-review--conversations)))
-  (setq git-review--changes
-        (append (seq-remove (lambda (it)
-                              (equal (plist-get it :id)
-                                     (plist-get git-review--change :id)))
-                            git-review--changes)
-                `(,git-review--change)))
+  (git-review--update-changes git-review--change)
   (git-review-update-db)
   (setq git-review--change nil)
   (setq git-review--patchset nil)
@@ -481,31 +483,45 @@
 (defun git-review-select-file ()
   "Select a file to review."
   (interactive)
-  (when-let ((candidates (seq-map (lambda (file)
-                                    `(,file . ,(git-review--file-info file)))
-                                  (git-review--files)))
-             (file-info (git-review-completing-read candidates
-                                                    "Select file: "
-                                                    'git-review-file
-                                                    git-review-file-annotation))
-             (file (plist-get file-info :filename)))
+  (when-let* ((candidates (seq-map (lambda (file)
+                                     `(,file . ,(git-review--file-info file)))
+                                   (git-review--files)))
+              (file-info (git-review-completing-read candidates
+                                                     "Select file: "
+                                                     'git-review-file
+                                                     git-review-file-annotation))
+              (file (plist-get file-info :filename)))
     (git-review--switch-file file)))
+
+(defun git-review-select-patchset ()
+  "Select a patchset for change."
+  (interactive)
+  (when-let* ((candidates (seq-map (lambda (patchset)
+                                     `(,(number-to-string (plist-get patchset :number)) .
+                                       ,patchset))
+                                   (plist-get git-review--change :patchsets)))
+              (patchset (git-review-completing-read candidates
+                                                    "Select patchset: "
+                                                    'git-review-patchset
+                                                    git-review-patchset-annotation)))
+    (setq git-review--patchset patchset)
+    (git-review-start-review)))
 
 (defun git-review-select-conversation ()
   "Select a conversation."
   (interactive)
   ;; TODO(Niklas Eklund, 20230131): Think about how to deal with multi patchset conversations
-  (when-let ((candidates (thread-last (git-review--get-conversations)
-                                      (seq-filter (lambda (it)
-                                                    (equal (plist-get git-review--patchset :number)
-                                                           (plist-get it :patchset))))
-                                      (seq-map (lambda (it)
-                                                 `(,(git-review--conversation-summary it) . ,it)))
-                                      (git-review--deduplicate-candidates)))
-             (conversation (git-review-completing-read candidates
-                                                       "Select conversation: "
-                                                       'git-review-conversation
-                                                       git-review-conversation-annotation)))
+  (when-let* ((candidates (thread-last (git-review--get-conversations)
+                                       (seq-filter (lambda (it)
+                                                     (equal (plist-get git-review--patchset :number)
+                                                            (plist-get it :patchset))))
+                                       (seq-map (lambda (it)
+                                                  `(,(git-review--conversation-summary it) . ,it)))
+                                       (git-review--deduplicate-candidates)))
+              (conversation (git-review-completing-read candidates
+                                                        "Select conversation: "
+                                                        'git-review-conversation
+                                                        git-review-conversation-annotation)))
     (git-review--switch-file (plist-get conversation :filename))
     (git-review--move-to-conversation conversation)))
 
@@ -701,6 +717,22 @@
                    comments
                  (append comments
                          `(,comment))))))
+
+(defun git-review--update-changes (change)
+  "Update CHANGE."
+  (let* ((found-it)
+         (changes (seq-map (lambda (it)
+                             (if (equal (plist-get it :id) (plist-get change :id))
+                                 (progn
+                                   (setq found-it t)
+                                   change)
+                               it))
+                           git-review--changes)))
+    (setq git-review--changes
+          (if found-it
+              changes
+            (append changes
+                    `(,change))))))
 
 (defun git-review--update-conversations (conversation)
   "Update conversations with CONVERSATION."
