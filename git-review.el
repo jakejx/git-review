@@ -1505,11 +1505,12 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-file-conversations (entry)
   "Return ENTRY's conversation status."
   (if-let* ((file (plist-get (cdr entry) :filename))
-            (file-conversations (git-review--file-conversations file)))
-      (format "CONVERSATIONS(%s)" (length (seq-filter (lambda (it)
-                                                        (equal (plist-get it :patchset)
-                                                               (plist-get git-review--patchset :number)))
-                                                      file-conversations)))
+            (file-patchset-conversations
+             (seq-filter (lambda (it)
+                           (equal (plist-get it :patchset)
+                                  (plist-get git-review--patchset :number)))
+                         (git-review--file-conversations file))))
+      (format "CONVERSATIONS(%s)" (length file-patchset-conversations))
     ""))
 
 ;;;; Major modes
