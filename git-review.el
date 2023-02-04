@@ -1275,7 +1275,7 @@ Optionally instruct function to SET-FILENAME."
             (format "PS%s" (plist-get git-review--patchset :number))
             file-index
             number-of-files
-            progress)))
+            (format "%.1f" progress))))
 
 (defun git-review--create-conversation ()
   "Create a conversation."
