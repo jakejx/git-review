@@ -587,6 +587,29 @@
     (git-review-file)))
 
 ;;;###autoload
+(defun git-review-change-start ()
+  "Start to review a change."
+  (interactive)
+  (let* ((default-directory (project-root (project-current)))
+         (subject (with-temp-buffer
+                    (call-process-shell-command "git show --pretty=format:%s --no-patch" nil t)
+                    (buffer-string)))
+         (author (with-temp-buffer
+                   (call-process-shell-command "git show --pretty=format:%cn --no-patch" nil t)
+                   (buffer-string)))
+         (commit-hash (with-temp-buffer
+                        (call-process-shell-command "git show --pretty=format:%H --no-patch" nil t)
+                        (buffer-string)))
+         (project-name (with-temp-buffer
+                         (call-process-shell-command "git config --local remote.origin.url" nil t)
+                         (string-trim
+                          (car
+                           (last
+                            (split-string (buffer-string) "/" t)))))))
+    (git-review--initialize-review)
+    (git-review-start-review)))
+
+;;;###autoload
 (defun git-review-patchset ()
   "Review current patchset."
   (interactive)
