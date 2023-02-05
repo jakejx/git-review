@@ -964,13 +964,8 @@
       (setq git-review--conversations nil))
 
     (unless git-review--patchset
-      (setq git-review--patchset `(:commit-hash ,(git-review--commit-hash)
-                                                :parent-hash ,(git-review--commit-parent-hash)
-                                                :subject ,(git-review--commit-subject)
-                                                :author ,(git-review--commit-author)
-                                                :number ,git-review-patchset
-                                                :change ,git-review-change
-                                                :files ,(git-review--generate-patchset-files (git-review--commit-hash))))))
+      (setq git-review--patchset (git-review--create-patchset git-review-change
+                                                              git-review-patchset))))
 
   ;; TODO(Niklas Eklund, 20230127): Move to other location when a
   ;; different patchset is selected. Or maybe it needs to be here in
@@ -981,6 +976,16 @@
 
   (git-review--add-metadata-to-files)
   (git-review--add-ignore-tag-to-files))
+
+(defun git-review--create-patchset (change number)
+  "Create patch-set with NUMBER for CHANGE."
+  `(:commit-hash ,(git-review--commit-hash)
+                 :parent-hash ,(git-review--commit-parent-hash)
+                 :subject ,(git-review--commit-subject)
+                 :author ,(git-review--commit-author)
+                 :number ,number
+                 :change ,change
+                 :files ,(git-review--generate-patchset-files (git-review--commit-hash))))
 
 (defun git-review--generate-patchset-files (commit-hash)
   "Return a list of files in patchset with COMMIT-HASH."
