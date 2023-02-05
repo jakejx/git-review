@@ -590,22 +590,7 @@
 (defun git-review-change-start ()
   "Start to review a change."
   (interactive)
-  (let* ((default-directory (project-root (project-current)))
-         (subject (with-temp-buffer
-                    (call-process-shell-command "git show --pretty=format:%s --no-patch" nil t)
-                    (buffer-string)))
-         (author (with-temp-buffer
-                   (call-process-shell-command "git show --pretty=format:%cn --no-patch" nil t)
-                   (buffer-string)))
-         (commit-hash (with-temp-buffer
-                        (call-process-shell-command "git show --pretty=format:%H --no-patch" nil t)
-                        (buffer-string)))
-         (project-name (with-temp-buffer
-                         (call-process-shell-command "git config --local remote.origin.url" nil t)
-                         (string-trim
-                          (car
-                           (last
-                            (split-string (buffer-string) "/" t)))))))
+  (let* ((default-directory (project-root (project-current))))
     (git-review--initialize-review)
     (git-review-start-review)))
 
@@ -732,6 +717,39 @@
    'kill))
 
 ;;;; Support functions
+
+(defun git-review--commit-author ()
+  "Return the name of the commit author."
+  (with-temp-buffer
+    (call-process-shell-command "git show --pretty=format:%cn --no-patch" nil t)
+    (buffer-string)))
+
+(defun git-review--commit-project ()
+  "Return name of current project."
+  (with-temp-buffer
+    (call-process-shell-command "git config --local remote.origin.url" nil t)
+    (string-trim
+     (car
+      (last
+       (split-string (buffer-string) "/" t))))))
+
+(defun git-review--commit-parent-hash ()
+  "Return parent commit hash."
+  (with-temp-buffer
+    (call-process-shell-command "git show --pretty=format:%P --no-patch" nil t)
+    (buffer-string)))
+
+(defun git-review--commit-hash ()
+  "Return current commit hash."
+  (with-temp-buffer
+    (call-process-shell-command "git show --pretty=format:%H --no-patch" nil t)
+    (buffer-string)))
+
+(defun git-review--commit-subject ()
+  "Return subject of current commit."
+  (with-temp-buffer
+    (call-process-shell-command "git show --pretty=format:%s --no-patch" nil t)
+    (buffer-string)))
 
 (defun git-review--update-conversation-comment (conversation comment)
   "Update CONVERSATION with COMMENT."
@@ -940,22 +958,19 @@
     (unless git-review--change
       (setq git-review--change `(:id ,git-review-change
                                      :current-patchset ,git-review-patchset
+                                     :project ,(git-review--commit-project)
                                      :conversations nil
                                      :files nil))
       (setq git-review--conversations nil))
 
     (unless git-review--patchset
-      (let* ((commit-hash (with-temp-buffer
-                            (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
-                            (buffer-string)))
-             (parent-hash (with-temp-buffer
-                            (call-process-shell-command (concat "git show --no-patch --pretty=format:%P " commit-hash) nil t)
-                            (buffer-string))))
-        (setq git-review--patchset `(:commit-hash ,commit-hash
-                                                  :parent-hash ,parent-hash
-                                                  :number ,git-review-patchset
-                                                  :change ,git-review-change
-                                                  :files ,(git-review--generate-patchset-files commit-hash))))))
+      (setq git-review--patchset `(:commit-hash ,(git-review--commit-hash)
+                                                :parent-hash ,(git-review--commit-parent-hash)
+                                                :subject ,(git-review--commit-subject)
+                                                :author ,(git-review--commit-author)
+                                                :number ,git-review-patchset
+                                                :change ,git-review-change
+                                                :files ,(git-review--generate-patchset-files (git-review--commit-hash))))))
 
   ;; TODO(Niklas Eklund, 20230127): Move to other location when a
   ;; different patchset is selected. Or maybe it needs to be here in
