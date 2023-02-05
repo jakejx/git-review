@@ -956,16 +956,16 @@
     (git-review--restore-review git-review-change git-review-patchset)
 
     (unless git-review--change
-      (setq git-review--change `(:id ,git-review-change
-                                     :current-patchset ,git-review-patchset
-                                     :project ,(git-review--commit-project)
-                                     :conversations nil
-                                     :files nil))
+      (setq git-review--change (git-review--create-change
+                                git-review-change))
       (setq git-review--conversations nil))
 
     (unless git-review--patchset
       (setq git-review--patchset (git-review--create-patchset git-review-change
-                                                              git-review-patchset))))
+                                                              git-review-patchset))
+      (setq git-review--change
+            (plist-put git-review--change :current-patchset
+                       (plist-get git-review--patchset :number)))))
 
   ;; TODO(Niklas Eklund, 20230127): Move to other location when a
   ;; different patchset is selected. Or maybe it needs to be here in
@@ -976,6 +976,14 @@
 
   (git-review--add-metadata-to-files)
   (git-review--add-ignore-tag-to-files))
+
+(defun git-review--create-change (change-id)
+  "Create change with CHANGE-ID."
+  `(:id ,change-id
+        :current-patchset nil
+        :project ,(git-review--commit-project)
+        :conversations nil
+        :files nil))
 
 (defun git-review--create-patchset (change number)
   "Create patch-set with NUMBER for CHANGE."
