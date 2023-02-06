@@ -193,6 +193,7 @@
                                                   git-review--conversations)))
   (git-review--update-changes git-review--change)
   (git-review-update-db)
+  (setq git-review--files nil)
   (setq git-review--change nil)
   (setq git-review--patchset nil)
   (setq git-review--conversations nil)
