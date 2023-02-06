@@ -948,19 +948,20 @@
               `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
                 (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))))
 
-(defun git-review--initialize-review (&optional change-id patchset)
-  "Initialize review of CHANGE-ID's PATCHSET."
+(defun git-review--initialize-review (&optional change-id patchset-number)
+  "Initialize review of CHANGE-ID's PATCHSET-NUMBER."
   (let* ((change-id (or change-id
                         (funcall (plist-get git-review--config :change-id))))
-         (patchset (or patchset
+         (patchset-number (or patchset-number
                        (funcall (plist-get git-review--config :patchset)))))
 
     ;; Change
-    (setq git-review--change (or (seq-find (lambda (it)
-                                             (equal (plist-get it :id) change-id))
-                                           git-review--changes)
-                                 (git-review--create-change
-                                  change-id)))
+    (if-let ((change (seq-find (lambda (it)
+                                 (equal (plist-get it :id) change-id))
+                               git-review--changes)))
+        (setq git-review--change change)
+      (setq git-review--change (git-review--create-change
+                                change-id)))
 
     ;; Conversations
     (setq git-review--conversations
@@ -969,24 +970,24 @@
                     (funcall remote-conversations-fun))))
 
     ;; Patchset
-    (setq git-review--patchset (or (seq-find (lambda (it)
-                                               (equal (plist-get it :number) patchset))
-                                             (plist-get git-review--change :patchsets))
-                                   (git-review--create-patchset change-id
-                                                                patchset)))
-    (setq git-review--change
-          (plist-put git-review--change :current-patchset
-                     (plist-get git-review--patchset :number)))
+    (if-let ((patchset (seq-find (lambda (it)
+                                   (equal (plist-get it :number) patchset-number))
+                                 (plist-get git-review--change :patchsets))))
+        (setq git-review--patchset patchset)
+      (setq git-review--patchset (git-review--create-patchset change-id patchset-number))
+      (setq git-review--change
+            (plist-put git-review--change :current-patchset
+                       (plist-get git-review--patchset :number))))
 
     ;; Files
-    (setq git-review--files (or (seq-find (lambda (it)
-                                       (equal (plist-get it :id)
-                                              (git-review--patchset-id git-review--patchset)))
-                                          (plist-get git-review--change :files))
-                                (git-review--create-files git-review--patchset)))
-    ;; (git-review--add-metadata-to-files)
-    ;; (git-review--add-ignore-tag-to-files)
-    ))
+    (if-let ((files (seq-find (lambda (it)
+                                (equal (plist-get it :id)
+                                       (git-review--patchset-id git-review--patchset)))
+                              (plist-get git-review--change :files))))
+        (setq git-review--files files)
+      (setq git-review--files (git-review--create-files git-review--patchset))
+      (git-review--add-metadata-to-files)
+      (git-review--add-ignore-tag-to-files))))
 
 (defun git-review--patchset-id (patchset)
   "Return the ID of PATCHSET review."
@@ -1065,12 +1066,12 @@
 
 (defun git-review--add-metadata-to-files ()
   "Add metadata to files in variable `git-review--files'."
-  (setq git-review--files
-        (seq-map (lambda (it)
-                   (if-let ((metadata (git-review--file-metadata it)))
-                       (plist-put it :metadata metadata)
-                     it))
-                 (git-review--get-files))))
+  (git-review--update-files
+   (seq-map (lambda (it)
+              (if-let ((metadata (git-review--file-metadata it)))
+                  (plist-put it :metadata metadata)
+                it))
+            (git-review--get-files))))
 
 (defun git-review--remove-rebased-files-from-review ()
   "Remove rebased files in variable `git-review'."
@@ -1659,11 +1660,15 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-patchset-progress (entry)
   "Return review progress of ENTRY."
   (if-let* ((patchset (cdr entry))
-            (files (seq-find (lambda (it)
-                               (equal (plist-get it :id)
-                                      (git-review--patchset-id patchset)))
-                             (plist-get git-review--change :files))))
-      (format "%.1f%%" (git-review--progress files))
+            (files
+             (if (equal (plist-get git-review--files :id)
+                        (git-review--patchset-id patchset))
+                 git-review--files
+               (seq-find (lambda (it)
+                           (equal (plist-get it :id)
+                                  (git-review--patchset-id patchset)))
+                         (plist-get git-review--change :files)))))
+      (format "%.1f%%" (git-review--progress (plist-get files :files)))
     "?"))
 
 ;;;; Major modes
