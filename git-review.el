@@ -77,7 +77,7 @@
   :type 'symbol)
 
 (defcustom git-review-patchset-annotation
-  '((:name type :function (lambda (_) "TEST") :face 'font-lock-comment-face))
+  '((:name conversations :function git-review--annotation-patchset-conversations :face 'font-lock-comment-face))
   "A list of annotations to display for a review file."
   :group 'git-review
   :type 'symbol)
@@ -491,10 +491,11 @@
 (defun git-review-select-patchset ()
   "Select a patchset for change."
   (interactive)
-  (when-let* ((candidates (seq-map (lambda (patchset)
-                                     `(,(number-to-string (plist-get patchset :number)) .
-                                       ,patchset))
-                                   (plist-get git-review--change :patchsets)))
+  (when-let* ((candidates (thread-last (plist-get git-review--change :patchsets)
+                                       (seq-reverse)
+                                       (seq-map (lambda (patchset)
+                                                  `(,(number-to-string (plist-get patchset :number)) .
+                                                    ,patchset)))))
               (patchset (git-review-completing-read candidates
                                                     "Select patchset: "
                                                     'git-review-patchset
@@ -958,6 +959,12 @@
       (setq git-review--change (git-review--create-change
                                 git-review-change))
       (setq git-review--conversations nil))
+
+    ;; Conversations
+    (when-let ((remote-conversations-fun (plist-get git-review--config :remote-conversations)))
+      (setq git-review--conversations
+            (append git-review--conversations
+                    (funcall remote-conversations-fun))))
 
     (unless git-review--patchset
       (setq git-review--patchset (git-review--create-patchset git-review-change
@@ -1629,6 +1636,16 @@ Optionally instruct function to SET-FILENAME."
       (format "CONVERSATIONS(%s)" (length file-patchset-conversations))
     ""))
 
+(defun git-review--annotation-patchset-conversations (entry)
+  "Return ENTRY's conversation status."
+  (if-let* ((patchset-number (plist-get (cdr entry) :number))
+            (patchset-conversations (seq-filter (lambda (it)
+                                                  (equal (plist-get it :patchset)
+                                                         patchset-number))
+                                                (git-review--get-conversations))))
+      (format "CONVERSATIONS(%s)" (length patchset-conversations))
+    ""))
+
 ;;;; Major modes
 
 (defvar git-review-mode-map
@@ -1649,6 +1666,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "P") #'git-review-previous-conversation)
     (define-key map (kbd "]") #'git-review-next-file)
     (define-key map (kbd "[") #'git-review-previous-file)
+    (define-key map (kbd "-") #'git-review-select-patchset)
     (define-key map (kbd "^") #'git-review-switch-to-most-recent-file)
     map))
 
