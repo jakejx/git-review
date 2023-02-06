@@ -77,8 +77,9 @@
   :type 'symbol)
 
 (defcustom git-review-patchset-annotation
-  '((:name conversations :function git-review--annotation-patchset-conversations :face 'font-lock-comment-face))
-  "A list of annotations to display for a review file."
+  '((:name conversations :function git-review--annotation-patchset-conversations :face 'font-lock-comment-face)
+    (:name author :function git-review--annotation-patchset-author :face 'font-lock-comment-face))
+  "A list of annotations to display for a patchset."
   :group 'git-review
   :type 'symbol)
 
@@ -613,11 +614,8 @@
 ;;                                        base-revision)
 ;;       (git-review-start-review))))
 
-(defun git-review-submit-comments ()
-  "Submit review comments."
-  ;; TODO: Consider this a submit review function. It might be
-  ;; valuable to be able to send a review even without specific file
-  ;; comments
+(defun git-review-submit-review ()
+  "Submit review."
   (interactive)
   (if-let ((submit-function (plist-get git-review--config :submit)))
       (progn
@@ -1647,6 +1645,10 @@ Optionally instruct function to SET-FILENAME."
       (format "CONVERSATIONS(%s)" (length patchset-conversations))
     ""))
 
+(defun git-review--annotation-patchset-author (entry)
+  "Return ENTRY's author."
+  (plist-get (cdr entry) :author))
+
 ;;;; Major modes
 
 (defvar git-review-mode-map
@@ -1660,7 +1662,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "q") #'git-review-quit)
-    (define-key map (kbd "S") #'git-review-submit-comments)
+    (define-key map (kbd "S") #'git-review-submit-review)
     (define-key map (kbd "n") #'git-review-next-hunk)
     (define-key map (kbd "N") #'git-review-next-conversation)
     (define-key map (kbd "p") #'git-review-previous-hunk)
