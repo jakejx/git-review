@@ -967,8 +967,9 @@
                     (funcall remote-conversations-fun))))
 
     (unless git-review--patchset
-      (setq git-review--patchset (git-review--create-patchset git-review-change
-                                                              git-review-patchset))
+      (setq git-review--patchset
+            (git-review--create-patchset git-review-change
+                                         git-review-patchset))
       (setq git-review--change
             (plist-put git-review--change :current-patchset
                        (plist-get git-review--patchset :number)))))
