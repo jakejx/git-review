@@ -1013,7 +1013,7 @@
 
 (defun git-review--create-files (patchset)
   "Create PATCHSET files."
-  ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non nil.
+  ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non-nil.
   (let ((files `(:id ,(git-review--patchset-id patchset)
                      :files ,(git-review--generate-patchset-files
                               (git-review--commit-hash)))))
