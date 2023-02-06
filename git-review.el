@@ -810,6 +810,13 @@
                                      patchsets)))
     (setq git-review--change (plist-put git-review--change :patchsets sorted-patchsets))))
 
+(defun git-review--add-patchset-files (files)
+  "Add patchset FILES."
+  (let* ((updated-files (append
+                         (plist-get git-review--change :files)
+                         `(,files))))
+    (setq git-review--change (plist-put git-review--change :files updated-files))))
+
 (defun git-review--conversation-overlays (conversation)
   "Return overlays associated with CONVERSATION."
   (when-let* ((conversation-id (plist-get conversation :id))
@@ -843,11 +850,10 @@
 
 (defun git-review--is-reviewed-p (file)
   "Return t if FILE is reviewed."
-  (let ((files (plist-get git-review--patchset :files)))
-    (plist-get (seq-find (lambda (it)
-                           (equal file (plist-get it :filename)))
-                         files)
-               :reviewed)))
+  (plist-get (seq-find (lambda (it)
+                         (equal file (plist-get it :filename)))
+                       (git-review--files))
+             :reviewed))
 
 (defun git-review--update-file (file)
   "Update files with FILE."
@@ -878,13 +884,13 @@
     git-review--conversations))
 
 (defun git-review--get-files ()
-  "Return review files."
-  (plist-get git-review--patchset :files))
+  "Return files."
+  (plist-get git-review--files :files))
 
 (defun git-review--update-files (files)
   "Update review with FILES."
-  (setq git-review--patchset
-        (plist-put git-review--patchset :files files)))
+  (setq git-review--files
+        (plist-put git-review--files :files files)))
 
 (defun git-review--ignore-file-p (file)
   "Return t if FILE should be ignored."
@@ -905,8 +911,9 @@
 
 (defun git-review--files ()
   "Return a list of review files."
+  ;; TODO(Niklas Eklund, 20230206): Deprecate this function
   (seq-map (lambda (it) (plist-get it :filename))
-           (plist-get git-review--patchset :files)))
+           (git-review--get-files)))
 
 (defun git-review--current-file ()
   "Return the name of the current file being reviewed."
@@ -935,7 +942,7 @@
 (defun git-review--file-info (&optional file)
   "Info about FILE."
   (let ((file (or file (plist-get git-review--patchset :current-file)))
-        (files (plist-get git-review--patchset :files)))
+        (files (git-review--get-files)))
     (seq-find (lambda (it) (equal (plist-get it :filename) file)) files)))
 
 (defun git-review--store-buffer-locations ()
@@ -976,8 +983,20 @@
                      (plist-get git-review--patchset :number)))
 
     ;; Files
-    (git-review--add-metadata-to-files)
-    (git-review--add-ignore-tag-to-files)))
+    (setq git-review--files (or (seq-find (lambda (it)
+                                       (equal (plist-get it :id)
+                                              (git-review--patchset-id git-review--patchset)))
+                                          (plist-get git-review--change :files))
+                                (git-review--create-files git-review--patchset)))
+    ;; (git-review--add-metadata-to-files)
+    ;; (git-review--add-ignore-tag-to-files)
+    ))
+
+(defun git-review--patchset-id (patchset)
+  "Return the ID of PATCHSET review."
+  (concat (number-to-string (plist-get patchset :number))
+          (when-let ((base (plist-get patchset :base-patchset)))
+            (concat "-" (number-to-string base)))))
 
 (defun git-review--create-change (change-id)
   "Create change with CHANGE-ID."
@@ -995,6 +1014,15 @@
         (append git-review--changes
                 `(,change))))
 
+(defun git-review--create-files (patchset)
+  "Create PATCHSET files."
+  ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non nil.
+  (let ((files `(:id ,(git-review--patchset-id patchset)
+                     :files ,(git-review--generate-patchset-files
+                              (git-review--commit-hash)))))
+    (git-review--add-patchset-files files)
+    files))
+
 (defun git-review--create-patchset (change number)
   "Create patch-set with NUMBER for CHANGE."
   (let ((patchset `(:commit-hash ,(git-review--commit-hash)
@@ -1002,8 +1030,7 @@
                                  :subject ,(git-review--commit-subject)
                                  :author ,(git-review--commit-author)
                                  :number ,number
-                                 :change ,change
-                                 :files ,(git-review--generate-patchset-files (git-review--commit-hash)))))
+                                 :change ,change)))
     (git-review--add-patchset patchset)
     patchset))
 
@@ -1041,15 +1068,13 @@
             (git-review--get-files))))
 
 (defun git-review--add-metadata-to-files ()
-  "Add metadata to files in variable `git-review--patchset'."
-  (let ((files (plist-get git-review--patchset :files)))
-    (setq git-review--patchset
-          (plist-put git-review--patchset :files
-                     (seq-map (lambda (it)
-                                (if-let ((metadata (git-review--file-metadata it)))
-                                    (plist-put it :metadata metadata)
-                                  it))
-                              files)))))
+  "Add metadata to files in variable `git-review--files'."
+  (setq git-review--files
+        (seq-map (lambda (it)
+                   (if-let ((metadata (git-review--file-metadata it)))
+                       (plist-put it :metadata metadata)
+                     it))
+                 (git-review--get-files))))
 
 (defun git-review--remove-rebased-files-from-review ()
   "Remove rebased files in variable `git-review'."
@@ -1483,7 +1508,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--next-file (file)
   "Return next file after FILE."
-  (thread-last (plist-get git-review--patchset :files)
+  (thread-last (git-review--get-files)
                (seq-drop-while (lambda (it)
                                  (not (string= (plist-get it :filename)
                                                file))))
@@ -1495,7 +1520,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--previous-file (file)
   "Return previous file before FILE."
-  (thread-last (plist-get git-review--patchset :files)
+  (thread-last (git-review--get-files)
                (seq-take-while (lambda (it)
                                  (let-alist it
                                    (not (string= (plist-get it :filename)
@@ -1636,9 +1661,13 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--annotation-patchset-progress (entry)
   "Return review progress of ENTRY."
-  (format "%.1f%%"
-          (git-review--progress
-           (plist-get (cdr entry) :files))))
+  (if-let* ((patchset (cdr entry))
+            (files (seq-find (lambda (it)
+                               (equal (plist-get it :id)
+                                      (git-review--patchset-id patchset)))
+                             (plist-get git-review--change :files))))
+      (format "%.1f%%" (git-review--progress files))
+    "?"))
 
 ;;;; Major modes
 
