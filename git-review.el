@@ -78,7 +78,8 @@
 
 (defcustom git-review-patchset-annotation
   '((:name conversations :function git-review--annotation-patchset-conversations :face 'font-lock-comment-face)
-    (:name author :function git-review--annotation-patchset-author :face 'font-lock-comment-face))
+    (:name author :function git-review--annotation-patchset-author :face 'font-lock-comment-face)
+    (:name progress :function git-review--annotation-patchset-progress :face 'font-lock-comment-face))
   "A list of annotations to display for a patchset."
   :group 'git-review
   :type 'symbol)
@@ -915,15 +916,15 @@
   "Return the name of the most recently reviewed file."
   (plist-get git-review--patchset :recent-file))
 
-(defun git-review--progress ()
-  "Return review progress."
-  (if-let* ((files (seq-remove (lambda (it)
-                                 (plist-get it :ignore))
-                               (git-review--get-files)))
+(defun git-review--progress (files)
+  "Return review progress of FILES."
+  (if-let* ((interesting-files (seq-remove (lambda (it)
+                                             (plist-get it :ignore))
+                                           files))
             (reviewed-files (seq-filter (lambda (it)
                                           (plist-get it :reviewed))
-                                        files)))
-      (/ (float (length reviewed-files)) (length files))
+                                        interesting-files)))
+      (* (/ (float (length reviewed-files)) (length interesting-files)) 100)
     0.0))
 
 (defun git-review--current-revision-diff-regions ()
@@ -1336,7 +1337,7 @@ Optionally instruct function to SET-FILENAME."
                                               (equal (plist-get a :filename)
                                                      (plist-get b :filename))))))
          (number-of-files (1- (seq-length review-files)))
-         (progress (* (git-review--progress) 100)))
+         (progress (git-review--progress (git-review--get-files))))
     (format "*Git Review: %s [%s/%s] %s%%*"
             (format "PS%s" (plist-get git-review--patchset :number))
             file-index
@@ -1648,6 +1649,12 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-patchset-author (entry)
   "Return ENTRY's author."
   (plist-get (cdr entry) :author))
+
+(defun git-review--annotation-patchset-progress (entry)
+  "Return review progress of ENTRY."
+  (format "%.1f%%"
+          (git-review--progress
+           (plist-get (cdr entry) :files))))
 
 ;;;; Major modes
 
