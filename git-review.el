@@ -947,41 +947,37 @@
 
 (defun git-review--initialize-review (&optional change-id patchset)
   "Initialize review of CHANGE-ID's PATCHSET."
-  (let* ((git-review-change (or change-id
-                                (funcall (plist-get git-review--config :change-id))))
-         (git-review-patchset (or patchset
-                                  (funcall (plist-get git-review--config :patchset)))))
+  (let* ((change-id (or change-id
+                        (funcall (plist-get git-review--config :change-id))))
+         (patchset (or patchset
+                       (funcall (plist-get git-review--config :patchset)))))
 
-    (git-review--restore-review git-review-change git-review-patchset)
-
-    (unless git-review--change
-      (setq git-review--change (git-review--create-change
-                                git-review-change))
-      (setq git-review--conversations nil))
+    ;; Change
+    (setq git-review--change (or (seq-find (lambda (it)
+                                             (equal (plist-get it :id) change-id))
+                                           git-review--changes)
+                                 (git-review--create-change
+                                  change-id)))
 
     ;; Conversations
-    (when-let ((remote-conversations-fun (plist-get git-review--config :remote-conversations)))
-      (setq git-review--conversations
-            (append git-review--conversations
+    (setq git-review--conversations
+          (append (plist-get git-review--change :conversations)
+                  (when-let ((remote-conversations-fun (plist-get git-review--config :remote-conversations)))
                     (funcall remote-conversations-fun))))
 
-    (unless git-review--patchset
-      (setq git-review--patchset
-            (git-review--create-patchset git-review-change
-                                         git-review-patchset))
-      (setq git-review--change
-            (plist-put git-review--change :current-patchset
-                       (plist-get git-review--patchset :number)))))
+    ;; Patchset
+    (setq git-review--patchset (or (seq-find (lambda (it)
+                                               (equal (plist-get it :number) patchset))
+                                             (plist-get git-review--change :patchsets))
+                                   (git-review--create-patchset change-id
+                                                                patchset)))
+    (setq git-review--change
+          (plist-put git-review--change :current-patchset
+                     (plist-get git-review--patchset :number)))
 
-  ;; TODO(Niklas Eklund, 20230127): Move to other location when a
-  ;; different patchset is selected. Or maybe it needs to be here in
-  ;; case a stored reviewed has a non-nil base-patchset
-
-  ;; (when multiple-patchsets
-  ;;   (git-review--remove-rebased-files-from-review))
-
-  (git-review--add-metadata-to-files)
-  (git-review--add-ignore-tag-to-files))
+    ;; Files
+    (git-review--add-metadata-to-files)
+    (git-review--add-ignore-tag-to-files)))
 
 (defun git-review--create-change (change-id)
   "Create change with CHANGE-ID."
@@ -1079,18 +1075,6 @@
                     (setf updated-files (assoc-delete-all file updated-files #'equal)))))
               updated-files)
       (setf (alist-get 'files git-review) updated-files))))
-
-(defun git-review--restore-review (change-id patchset-number)
-  "Restore review with matching CHANGE-ID and PATCHSET-NUMBER."
-  (when-let ((change (seq-find (lambda (it)
-                                 (equal (plist-get it :id) change-id))
-                               git-review--changes)))
-    (setq git-review--change change)
-    (setq git-review--conversations (plist-get change :conversations))
-    (when-let ((patchset (seq-find (lambda (it)
-                                     (equal (plist-get it :number) patchset-number))
-                                   (plist-get change :patchsets))))
-      (setq git-review--patchset patchset))))
 
 (defun git-review--restore-buffer-location (file)
   "Restore buffer location in FILE.
