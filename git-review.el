@@ -1529,16 +1529,6 @@ Optionally instruct function to SET-FILENAME."
                (funcall (lambda (it)
                           (plist-get it :filename)))))
 
-(defun git-review--next-conversation ()
-  "Return next conversation."
-  ;; TODO: Make it possible to find next conversation in other file
-  (git-review--file-next-conversation (git-review--current-file)))
-
-(defun git-review--previous-conversation ()
-  "Return previous comment."
-  ;; TODO: Make it possible to find next conversation in other file
-  (git-review--file-previous-conversation (git-review--current-file)))
-
 (defun git-review--annotations (candidates)
   "Return annotations of CANDIDATES."
   (thread-last candidates
