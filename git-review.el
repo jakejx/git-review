@@ -141,8 +141,8 @@
 (defvar git-review--annotation-config nil)
 
 (defvar git-review--conversation-frame nil)
-
 (defvar git-review--hide-other-conversations nil)
+
 ;;;; Faces
 
 (defgroup git-review-faces nil
@@ -211,7 +211,9 @@
       (git-review-setup-project-file-review
        (if-let ((current-file (git-review--current-file)))
            current-file
-         (seq-elt (git-review--files) 0)))
+         (plist-get
+          (seq-elt (git-review--get-files) 0)
+          :filename)))
       (git-review-file))))
 
 (defun git-review-setup-project-file-review (file)
@@ -482,14 +484,13 @@
   "Select a file to review."
   (interactive)
   (when-let* ((candidates (seq-map (lambda (file)
-                                     `(,file . ,(git-review--file-info file)))
-                                   (git-review--files)))
-              (file-info (git-review-completing-read candidates
-                                                     "Select file: "
-                                                     'git-review-file
-                                                     git-review-file-annotation))
-              (file (plist-get file-info :filename)))
-    (git-review--switch-file file)))
+                                     `(,(plist-get file :filename) . ,file))
+                                   (git-review--get-files)))
+              (file (git-review-completing-read candidates
+                                                "Select file: "
+                                                'git-review-file
+                                                git-review-file-annotation)))
+    (git-review--switch-file (plist-get file :filename))))
 
 (defun git-review-select-patchset ()
   "Select a patchset for change."
@@ -853,7 +854,7 @@
   "Return t if FILE is reviewed."
   (plist-get (seq-find (lambda (it)
                          (equal file (plist-get it :filename)))
-                       (git-review--files))
+                       (git-review--get-files))
              :reviewed))
 
 (defun git-review--update-file (file)
@@ -909,12 +910,6 @@
 (defun git-review--multiple-patchsets-p ()
   "Return t if multiple patch-sets are being reviewed."
   (let-alist git-review .multiple-patchsets))
-
-(defun git-review--files ()
-  "Return a list of review files."
-  ;; TODO(Niklas Eklund, 20230206): Deprecate this function
-  (seq-map (lambda (it) (plist-get it :filename))
-           (git-review--get-files)))
 
 (defun git-review--current-file ()
   "Return the name of the current file being reviewed."
@@ -1086,7 +1081,8 @@
                            (seq-map #'git-review-branch-modified-files)
                            (flatten-list))))
          (review-files
-          (thread-last (git-review--files)
+          (thread-last (git-review--get-files)
+                       (seq-map (lambda (it) (plist-get it :filename)))
                        (seq-filter (lambda (it)
                                      (member it files-union)))
                        ;; TODO(Niklas Eklund, 20230111): Look into the
