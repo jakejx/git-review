@@ -54,26 +54,6 @@
   :type 'symbol
   :group 'git-review)
 
-(defcustom git-review-determine-change-function
-  (lambda ()
-    (with-temp-buffer
-      (call-process-shell-command "git show --no-patch --pretty=format:%H" nil t)
-      (buffer-string)))
-  "A function that returns a change value."
-  :type 'symbol
-  :group 'git-review)
-
-(defcustom git-review-determine-patchset-function (lambda ()
-                                                    1)
-  "A function that returns a patchset value."
-  :type 'symbol
-  :group 'git-review)
-
-(defcustom git-review-submit-function nil
-  "Function that can submit a review."
-  :type 'symbol
-  :group 'git-review)
-
 (defcustom git-review-database-dir user-emacs-directory
   "The directory to store the review database in."
   :type 'string
@@ -90,6 +70,11 @@
 (defun git-review--annotation-file-name (entry)
   "Return file-name of ENTRY."
   (car entry))
+
+(defcustom git-review-config nil
+  "A function which returns a review configuration."
+  :group 'git-review
+  :type 'symbol)
 
 (defcustom git-review-patchset-annotation
   '((:name type :function (lambda (_) "TEST") :face 'font-lock-comment-face))
@@ -143,6 +128,7 @@
 (defvar git-review--patchset nil "The current patchset.")
 (defvar git-review--conversations nil "List of conversations.")
 (defvar git-review--files nil "List of files.")
+(defvar git-review--config nil "Configuration of current review.")
 
 (defvar-local git-review--current-comment nil)
 (defvar-local git-review--current-conversation nil)
@@ -207,7 +193,8 @@
   (git-review-update-db)
   (setq git-review--change nil)
   (setq git-review--patchset nil)
-  (setq git-review--conversations nil))
+  (setq git-review--conversations nil)
+  (setq git-review--config nil))
 
 (defun git-review-start-review ()
   "Start review."
@@ -512,7 +499,11 @@
                                                     "Select patchset: "
                                                     'git-review-patchset
                                                     git-review-patchset-annotation)))
-    (setq git-review--patchset patchset)
+    (git-review--update-patchsets git-review--patchset)
+    (git-review--initialize-review (plist-get git-review--change :id)
+                                   (plist-get patchset :number))
+    (git-review-close-review-file)
+    (tab-bar-close-tab)
     (git-review-start-review)))
 
 (defun git-review-select-conversation ()
@@ -587,8 +578,8 @@
     (git-review-file)))
 
 ;;;###autoload
-(defun git-review-change-start ()
-  "Start to review a change."
+(defun git-review-change ()
+  "Review a new change."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (git-review--initialize-review)
@@ -599,6 +590,8 @@
   "Review current patchset."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
+    (setq git-review--config (when (functionp git-review-config)
+                               (funcall git-review-config)))
     (git-review--initialize-review)
     (git-review-start-review)))
 
@@ -625,10 +618,9 @@
   ;; valuable to be able to send a review even without specific file
   ;; comments
   (interactive)
-  (if (functionp git-review-submit-function)
+  (if-let ((submit-function (plist-get git-review--config :submit)))
       (progn
-        (setq git-review--conversations
-              (funcall git-review-submit-function git-review--conversations))
+        (funcall submit-function)
         (git-review-quit))
     (message "No submit function defined")))
 
@@ -769,19 +761,12 @@
 
 (defun git-review--update-changes (change)
   "Update CHANGE."
-  (let* ((found-it)
-         (changes (seq-map (lambda (it)
-                             (if (equal (plist-get it :id) (plist-get change :id))
-                                 (progn
-                                   (setq found-it t)
-                                   change)
-                               it))
-                           git-review--changes)))
-    (setq git-review--changes
-          (if found-it
-              changes
-            (append changes
-                    `(,change))))))
+  (setq git-review--changes
+        (seq-map (lambda (it)
+                   (if (equal (plist-get it :id) (plist-get change :id))
+                       change
+                     it))
+                 git-review--changes)))
 
 (defun git-review--update-conversations (conversation)
   "Update conversations with CONVERSATION."
@@ -803,13 +788,27 @@
 
 (defun git-review--update-patchsets (patchset)
   "Update patch-sets with PATCHSET."
-  (setq git-review--change
-        (plist-put git-review--change :patchsets
-                   (append (seq-remove (lambda (it)
-                                         (equal (plist-get it :id)
-                                                (plist-get patchset :id)))
-                                       (plist-get git-review--change :patchsets))
-                           `(,patchset)))))
+  (let* ((updated-patchsets
+          (seq-map (lambda (it)
+                     (if (equal (plist-get it :number) (plist-get patchset :number))
+                         (progn
+                           (setq found-it t)
+                           patchset)
+                       it))
+                   (plist-get git-review--change :patchsets))))
+    (setq git-review--change
+          (plist-put git-review--change :patchsets updated-patchsets))))
+
+(defun git-review--add-patchset (patchset)
+  "Add PATCHSET to current change."
+  (let* ((patchsets (append
+                     (plist-get git-review--change :patchsets)
+                     `(,patchset)))
+         (sorted-patchsets (seq-sort (lambda (a b)
+                                       (< (plist-get a :number)
+                                          (plist-get b :number)))
+                                     patchsets)))
+    (setq git-review--change (plist-put git-review--change :patchsets sorted-patchsets))))
 
 (defun git-review--conversation-overlays (conversation)
   "Return overlays associated with CONVERSATION."
@@ -946,12 +945,12 @@
               `((a . ,(with-current-buffer git-review-base-revision-buffer (point)))
                 (b . ,(with-current-buffer git-review-current-revision-buffer (point)))))))
 
-(defun git-review--initialize-review ()
-  "Initialize review."
-  (let* ((git-review-change (when git-review-determine-change-function
-                              (funcall git-review-determine-change-function)))
-         (git-review-patchset (when git-review-determine-patchset-function
-                                (funcall git-review-determine-patchset-function))))
+(defun git-review--initialize-review (&optional change-id patchset)
+  "Initialize review of CHANGE-ID's PATCHSET."
+  (let* ((git-review-change (or change-id
+                                (funcall (plist-get git-review--config :change-id))))
+         (git-review-patchset (or patchset
+                                  (funcall (plist-get git-review--config :patchset)))))
 
     (git-review--restore-review git-review-change git-review-patchset)
 
@@ -979,21 +978,31 @@
 
 (defun git-review--create-change (change-id)
   "Create change with CHANGE-ID."
-  `(:id ,change-id
-        :current-patchset nil
-        :project ,(git-review--commit-project)
-        :conversations nil
-        :files nil))
+  (let ((change `(:id ,change-id
+                      :current-patchset nil
+                      :project ,(git-review--commit-project)
+                      :conversations nil
+                      :files nil)))
+    (git-review--add-change change)
+    change))
+
+(defun git-review--add-change (change)
+  "Add CHANGE to list of change(s)."
+  (setq git-review--changes
+        (append git-review--changes
+                `(,change))))
 
 (defun git-review--create-patchset (change number)
   "Create patch-set with NUMBER for CHANGE."
-  `(:commit-hash ,(git-review--commit-hash)
-                 :parent-hash ,(git-review--commit-parent-hash)
-                 :subject ,(git-review--commit-subject)
-                 :author ,(git-review--commit-author)
-                 :number ,number
-                 :change ,change
-                 :files ,(git-review--generate-patchset-files (git-review--commit-hash))))
+  (let ((patchset `(:commit-hash ,(git-review--commit-hash)
+                                 :parent-hash ,(git-review--commit-parent-hash)
+                                 :subject ,(git-review--commit-subject)
+                                 :author ,(git-review--commit-author)
+                                 :number ,number
+                                 :change ,change
+                                 :files ,(git-review--generate-patchset-files (git-review--commit-hash)))))
+    (git-review--add-patchset patchset)
+    patchset))
 
 (defun git-review--generate-patchset-files (commit-hash)
   "Return a list of files in patchset with COMMIT-HASH."
