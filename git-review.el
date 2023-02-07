@@ -842,8 +842,8 @@
 
 (defun git-review--base-revision ()
   "Return the base revision."
-  (or (plist-get git-review--patchset :base-patchset)
-      (plist-get git-review--patchset :parent-hash)))
+  ;; TODO(Niklas Eklund, 20230207): Add functionality to get hash for patchset
+  (plist-get git-review--patchset :parent-hash))
 
 (defun git-review--has-comments-p (file)
   "Return t if FILE has comments."
