@@ -528,6 +528,9 @@
   (interactive)
   (when-let* ((patchset git-review--patchset)
               (candidates (thread-last (plist-get git-review--change :patchsets)
+                                       (seq-remove (lambda (it)
+                                                     (equal (plist-get it :number)
+                                                            (plist-get git-review--patchset :number))))
                                        (seq-reverse)
                                        (seq-map (lambda (patchset)
                                                   `(,(number-to-string (plist-get patchset :number)) .
