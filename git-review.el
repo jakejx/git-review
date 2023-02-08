@@ -523,6 +523,28 @@
     (tab-bar-close-tab)
     (git-review-start-review)))
 
+(defun git-review-select-base-patchset ()
+  "Select the base patchset."
+  (interactive)
+  (when-let* ((patchset git-review--patchset)
+              (candidates (thread-last (plist-get git-review--change :patchsets)
+                                       (seq-reverse)
+                                       (seq-map (lambda (patchset)
+                                                  `(,(number-to-string (plist-get patchset :number)) .
+                                                    ,patchset)))))
+              (base-patchset (git-review-completing-read candidates
+                                                         "Select patchset: "
+                                                         'git-review-patchset
+                                                         git-review-patchset-annotation)))
+    (git-review--store-buffer-locations)
+    (git-review--update-patchset-files git-review--files)
+    (git-review--update-patchsets git-review--patchset)
+    (git-review-close-review-file)
+    (git-review--initialize-patchset (plist-get patchset :number)
+                                     (plist-get base-patchset :number))
+    (tab-bar-close-tab)
+    (git-review-start-review)))
+
 (defun git-review-select-conversation ()
   "Select a conversation."
   (interactive)
@@ -1001,8 +1023,10 @@
     ;; Patchset
     (git-review--initialize-patchset patchset-number)))
 
-(defun git-review--initialize-patchset (patchset-number)
-  "Initialize patchset with PATCHSET-NUMBER."
+(defun git-review--initialize-patchset (patchset-number &optional base-patchset-number)
+  "Initialize patchset with PATCHSET-NUMBER.
+
+Optionally provide a BASE-PATCHSET-NUMBER."
   ;; Patchset
   (if-let ((patchset (seq-find (lambda (it)
                                  (equal (plist-get it :number) patchset-number))
@@ -1012,6 +1036,8 @@
   (setq git-review--change
         (plist-put git-review--change :current-patchset
                    (plist-get git-review--patchset :number)))
+  (setq git-review--patchset (plist-put git-review--patchset :base-patchset base-patchset-number))
+
   ;; Files
   (if-let ((files (seq-find (lambda (it)
                               (equal (plist-get it :id)
@@ -1379,7 +1405,9 @@ Optionally instruct function to SET-FILENAME."
          (number-of-files (1- (seq-length review-files)))
          (progress (git-review--progress (git-review--get-files))))
     (format "*Git Review: %s [%s/%s] %s%%*"
-            (format "PS%s" (plist-get git-review--patchset :number))
+            (concat (when-let ((number (plist-get git-review--patchset :base-patchset)))
+                      (format "PS%s-" number))
+                    (format "PS%s" (plist-get git-review--patchset :number)))
             file-index
             number-of-files
             (format "%.1f" progress))))
@@ -1700,6 +1728,7 @@ Optionally instruct function to SET-FILENAME."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "a") #'git-review-jump-to-a)
     (define-key map (kbd "b") #'git-review-jump-to-b)
+    (define-key map (kbd "B") #'git-review-select-base-patchset)
     (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
     (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
