@@ -640,23 +640,6 @@
     (git-review--initialize-review)
     (git-review-start-review)))
 
-;; ;;;###autoload
-;; (defun git-review-patchsets ()
-;;   "Review the difference between two patch-sets."
-;;   (interactive)
-;;   (unless git-review-change
-;;     (setq git-review-change
-;;           (format "%s@%s"
-;;                   (git-review--current-git-branch)
-;;                   (project-root (project-current)))))
-;;   (let* ((default-directory (project-root (project-current))))
-;;     (when-let ((base-revision (completing-read "Select base revision: "
-;;                                                (git-review--other-git-branches)))
-;;                (current-revision (git-review--current-git-branch)))
-;;       (git-review--initialize-review current-revision
-;;                                        base-revision)
-;;       (git-review-start-review))))
-
 (defun git-review-submit-review ()
   "Submit review."
   (interactive)
