@@ -1088,7 +1088,7 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                      (git-review--current-revision patchset))))
            "\n")))
     (append
-     `((:filename "COMMIT_MSG"))
+     `((:filename "COMMIT_MSG" :type ,(if (plist-get patchset :base-patchset) "M" "A")))
      (seq-map (lambda (it)
                 (let ((elements (split-string it)))
                   (pcase elements
