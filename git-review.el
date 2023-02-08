@@ -185,12 +185,17 @@
 
 (defun git-review--update-review ()
   "Update change(s) with change."
+  (git-review--store-buffer-locations)
+  (git-review--update-patchset-files git-review--files)
   (git-review--update-patchsets git-review--patchset)
+
   ;; Remove remote conversations from local storage
-  (setq git-review--change (plist-put git-review--change :conversations
-                                      (seq-remove (lambda (it)
-                                                    (plist-get it :remote))
-                                                  git-review--conversations)))
+  (setq git-review--change
+        (plist-put git-review--change :conversations
+                   (seq-remove (lambda (it)
+                                 (plist-get it :remote))
+                               git-review--conversations)))
+
   (git-review--update-changes git-review--change)
   (git-review-update-db)
 
@@ -222,7 +227,7 @@
 (defun git-review-setup-project-file-review (file)
   "Setup `git-review' for project FILE review."
   (setq git-review--patchset (plist-put git-review--patchset :current-file file))
-  (let* ((default-directory (project-root (project-current)))
+  (let* ((default-directory (git-review--project-root))
          (file-info (git-review--file-info))
          (type (plist-get file-info :type)))
     (git-review--setup-buffers)
@@ -247,7 +252,7 @@
   "Review current file."
   (cl-letf* (((symbol-function #'ediff-mode) (lambda () (git-review-mode)))
              ((symbol-function #'ediff-set-keys) #'ignore)
-             (default-directory (project-root (project-current))))
+             (default-directory (git-review--project-root)))
     (ediff-buffers git-review-base-revision-buffer git-review-current-revision-buffer)
     (git-review--init-conversation-overlays)
     (git-review--restore-buffer-location (git-review--get-file (git-review--current-file)))))
@@ -256,7 +261,6 @@
   "Close current review file."
   (cl-letf (((symbol-function #'y-or-n-p) (lambda (&rest _args) t))
             (buffers `(,ediff-buffer-A ,ediff-buffer-B)))
-    (git-review--store-buffer-locations)
     (call-interactively #'ediff-quit)
     (seq-do (lambda (it)
               (with-current-buffer it
@@ -337,10 +341,14 @@
   (when git-review--hide-other-conversations
     (git-review-file)))
 
+(defun git-review--project-root ()
+  "Return project root of the current review."
+  (plist-get git-review--config :project-root))
+
 (defun git-review-open-patchset-diff ()
   "Open diff buffer with patch-set."
   (interactive)
-  (let* ((default-directory (project-root (project-current))))
+  (let* ((default-directory (git-review--project-root)))
     (vc-diff-internal t
                       (list (vc-responsible-backend default-directory) (list default-directory))
                       (git-review--base-revision git-review--patchset)
@@ -408,8 +416,8 @@
 (defun git-review-quit ()
   "Quit `git-review' review."
   (interactive)
-  (git-review-close-review-file)
   (git-review--update-review)
+  (git-review-close-review-file)
   (tab-bar-close-tab))
 
 (defun git-review-next-conversation ()
@@ -496,7 +504,7 @@
     (git-review--switch-file (plist-get file :filename))))
 
 (defun git-review-select-patchset ()
-  "Select a patchset for change."
+  "Select and switch to patchset."
   (interactive)
   (when-let* ((candidates (thread-last (plist-get git-review--change :patchsets)
                                        (seq-reverse)
@@ -507,10 +515,11 @@
                                                     "Select patchset: "
                                                     'git-review-patchset
                                                     git-review-patchset-annotation)))
+    (git-review--store-buffer-locations)
+    (git-review--update-patchset-files git-review--files)
     (git-review--update-patchsets git-review--patchset)
-    (git-review--initialize-review (plist-get git-review--change :id)
-                                   (plist-get patchset :number))
     (git-review-close-review-file)
+    (git-review--initialize-patchset (plist-get patchset :number))
     (tab-bar-close-tab)
     (git-review-start-review)))
 
@@ -581,6 +590,7 @@
   (when-let* ((recent-file (git-review--most-recent-file)))
     (setq git-review--patchset
           (plist-put git-review--patchset :recent-file (git-review--current-file)))
+    (git-review--store-buffer-locations)
     (git-review-close-review-file)
     (git-review-setup-project-file-review recent-file)
     (git-review-file)))
@@ -599,7 +609,9 @@
   (interactive)
   (let* ((default-directory (project-root (project-current))))
     (setq git-review--config (when (functionp git-review-config)
-                               (funcall git-review-config)))
+                               (plist-put (funcall git-review-config)
+                                          :project-root (project-root
+                                                         (project-current)))))
     (git-review--initialize-review)
     (git-review-start-review)))
 
@@ -815,8 +827,9 @@
 
 (defun git-review--add-patchset-files (files)
   "Add patchset FILES."
-  (let* ((updated-files (append
-                         (plist-get git-review--change :files)
+  (let* ((change-files (plist-get git-review--change :files))
+         (updated-files (append
+                         change-files
                          `(,files))))
     (setq git-review--change (plist-put git-review--change :files updated-files))))
 
@@ -833,6 +846,7 @@
   "Switch to FILE."
   (setq git-review--patchset
         (plist-put git-review--patchset :recent-file (git-review--current-file)))
+  (git-review--store-buffer-locations)
   (git-review-close-review-file)
   (git-review-setup-project-file-review file)
   (git-review-file))
@@ -899,6 +913,16 @@
   "Update review with FILES."
   (setq git-review--files
         (plist-put git-review--files :files files)))
+
+(defun git-review--update-patchset-files (files)
+  "Update patchset FILES."
+  (let ((updated-files (seq-map (lambda (it)
+                                  (if (equal (plist-get it :id) (plist-get files :id))
+                                      files
+                                    it))
+                                (plist-get git-review--change :files))))
+    (setq git-review--change
+          (plist-put git-review--change :files updated-files))))
 
 (defun git-review--ignore-file-p (file)
   "Return t if FILE should be ignored."
@@ -974,26 +998,29 @@
           (append (plist-get git-review--change :conversations)
                   (when-let ((remote-conversations-fun (plist-get git-review--config :remote-conversations)))
                     (funcall remote-conversations-fun))))
-
     ;; Patchset
-    (if-let ((patchset (seq-find (lambda (it)
-                                   (equal (plist-get it :number) patchset-number))
-                                 (plist-get git-review--change :patchsets))))
-        (setq git-review--patchset patchset)
-      (setq git-review--patchset (git-review--create-patchset change-id patchset-number))
-      (setq git-review--change
-            (plist-put git-review--change :current-patchset
-                       (plist-get git-review--patchset :number))))
+    (git-review--initialize-patchset patchset-number)))
 
-    ;; Files
-    (if-let ((files (seq-find (lambda (it)
-                                (equal (plist-get it :id)
-                                       (git-review--patchset-id git-review--patchset)))
-                              (plist-get git-review--change :files))))
-        (setq git-review--files files)
-      (setq git-review--files (git-review--create-files git-review--patchset))
-      (git-review--add-metadata-to-files)
-      (git-review--add-ignore-tag-to-files))))
+(defun git-review--initialize-patchset (patchset-number)
+  "Initialize patchset with PATCHSET-NUMBER."
+  ;; Patchset
+  (if-let ((patchset (seq-find (lambda (it)
+                                 (equal (plist-get it :number) patchset-number))
+                               (plist-get git-review--change :patchsets))))
+      (setq git-review--patchset patchset)
+    (setq git-review--patchset (git-review--create-patchset patchset-number)))
+  (setq git-review--change
+        (plist-put git-review--change :current-patchset
+                   (plist-get git-review--patchset :number)))
+  ;; Files
+  (if-let ((files (seq-find (lambda (it)
+                              (equal (plist-get it :id)
+                                     (git-review--patchset-id git-review--patchset)))
+                            (plist-get git-review--change :files))))
+      (setq git-review--files files)
+    (setq git-review--files (git-review--create-files git-review--patchset))
+    (git-review--add-metadata-to-files)
+    (git-review--add-ignore-tag-to-files)))
 
 (defun git-review--patchset-id (patchset)
   "Return the ID of PATCHSET review."
@@ -1027,14 +1054,13 @@
     (git-review--add-patchset-files files)
     files))
 
-(defun git-review--create-patchset (change number)
-  "Create patch-set with NUMBER for CHANGE."
+(defun git-review--create-patchset (number)
+  "Create patch-set with NUMBER."
   (let ((patchset `(:commit-hash ,(git-review--commit-hash)
                                  :parent-hash ,(git-review--commit-parent-hash)
                                  :subject ,(git-review--commit-subject)
                                  :author ,(git-review--commit-author)
-                                 :number ,number
-                                 :change ,change)))
+                                 :number ,number)))
     (git-review--add-patchset patchset)
     patchset))
 
@@ -1144,10 +1170,10 @@ Optionally instruct function to SET-FILENAME."
        (format "git show %s:%s" revision file) nil t)
       (setq-local default-directory
                   (file-name-directory
-                   (expand-file-name file (project-root (project-current)))))
+                   (expand-file-name file (git-review--project-root))))
       (when set-filename
         (setq-local buffer-file-name
-                    (expand-file-name file (project-root (project-current)))))
+                    (expand-file-name file (git-review--project-root))))
       (git-review---enable-mode))
     (read-only-mode)))
 
