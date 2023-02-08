@@ -226,7 +226,7 @@
 
 (defun git-review-setup-project-file-review (file)
   "Setup `git-review' for project FILE review."
-  (setq git-review--patchset (plist-put git-review--patchset :current-file file))
+  (setq git-review--files (plist-put git-review--files :current-file file))
   (let* ((default-directory (git-review--project-root))
          (file-info (git-review--file-info))
          (type (plist-get file-info :type)))
@@ -884,8 +884,8 @@
                                        (equal patchset-number
                                               (plist-get it :number)))
                                      (plist-get git-review--change :patchsets))))
-      (plist-get base-patchset :commit-hash))
-  (plist-get git-review--patchset :parent-hash))
+      (plist-get base-patchset :commit-hash)
+    (plist-get git-review--patchset :parent-hash)))
 
 (defun git-review--has-comments-p (file)
   "Return t if FILE has comments."
@@ -965,7 +965,7 @@
 
 (defun git-review--current-file ()
   "Return the name of the current file being reviewed."
-  (plist-get git-review--patchset :current-file))
+  (plist-get git-review--files :current-file))
 
 (defun git-review--most-recent-file ()
   "Return the name of the most recently reviewed file."
@@ -989,7 +989,7 @@
 
 (defun git-review--file-info (&optional file)
   "Info about FILE."
-  (let ((file (or file (plist-get git-review--patchset :current-file)))
+  (let ((file (or file (plist-get git-review--files :current-file)))
         (files (git-review--get-files)))
     (seq-find (lambda (it) (equal (plist-get it :filename) file)) files)))
 
@@ -1075,6 +1075,7 @@ Optionally provide a BASE-PATCHSET-NUMBER."
   "Create PATCHSET files."
   ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non-nil.
   (let ((files `(:id ,(git-review--patchset-id patchset)
+                     :current-file nil
                      :files ,(git-review--generate-patchset-files
                               patchset))))
     (git-review--add-patchset-files files)
