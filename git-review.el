@@ -1465,6 +1465,8 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--init-conversation-overlays ()
   "Initialize overlays for conversations."
+  ;; TODO(Niklas Eklund, 20230208): Update with a predicate that takes
+  ;; into account that there might be a non-nil base-patchset
   (let* ((file-conversations (git-review--file-conversations
                               (git-review--current-file))))
     (thread-last file-conversations
