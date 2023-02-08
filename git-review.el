@@ -131,17 +131,17 @@
 (defvar git-review--conversations nil "List of conversations.")
 (defvar git-review--files nil "List of files.")
 (defvar git-review--config nil "Configuration of current review.")
+(defvar git-review--hide-other-conversations nil)
+(defvar git-review--conversation-frame nil)
 
 (defvar-local git-review--current-comment nil)
 (defvar-local git-review--current-conversation nil)
 
+;; Used for completion
 (defvar git-review--candidates nil)
 (defvar git-review--annotations nil)
 (defvar git-review--annotation-widths nil)
 (defvar git-review--annotation-config nil)
-
-(defvar git-review--conversation-frame nil)
-(defvar git-review--hide-other-conversations nil)
 
 ;;;; Faces
 
@@ -193,11 +193,14 @@
                                                   git-review--conversations)))
   (git-review--update-changes git-review--change)
   (git-review-update-db)
-  (setq git-review--files nil)
+
+  ;; Reset variables
   (setq git-review--change nil)
   (setq git-review--patchset nil)
   (setq git-review--conversations nil)
-  (setq git-review--config nil))
+  (setq git-review--files nil)
+  (setq git-review--config nil)
+  (setq git-review--hide-other-conversations nil))
 
 (defun git-review-start-review ()
   "Start review."
@@ -226,17 +229,17 @@
     (if (string= (git-review--current-file) "COMMIT_MSG")
         (progn
           (when (string-equal "M" type)
-            (git-review--commit-message (git-review--base-revision)
+            (git-review--commit-message (git-review--base-revision git-review--patchset)
                                         git-review-base-revision-buffer))
-          (git-review--commit-message (git-review--current-revision)
+          (git-review--commit-message (git-review--current-revision git-review--patchset)
                                       git-review-current-revision-buffer))
       (unless (string-equal "A" type)
-        (git-review--file-content (git-review--base-revision)
+        (git-review--file-content (git-review--base-revision git-review--patchset)
                                   (or (plist-get file-info :original-filename)
                                       (plist-get file-info :filename))
                                   git-review-base-revision-buffer))
       (unless (string-equal "D" type)
-        (git-review--file-content (git-review--current-revision)
+        (git-review--file-content (git-review--current-revision git-review--patchset)
                                   file
                                   git-review-current-revision-buffer t)))))
 
@@ -309,12 +312,12 @@
   "Return t if FILE is changed due to a rebase."
   (unless (string= file "COMMIT_MSG")
     (let* ((file-info (git-review--file-info file))
-           (base-current-regions (git-review-hunk-regions (git-review--base-revision)
-                                                          (git-review--current-revision)
+           (base-current-regions (git-review-hunk-regions (git-review--base-revision git-review--patchset)
+                                                          (git-review--current-revision git-review--patchset)
                                                           (let-alist file-info .base-filename)
                                                           file))
-           (current-regions (git-review-hunk-regions (concat (git-review--current-revision) "~1")
-                                                     (git-review--current-revision)
+           (current-regions (git-review-hunk-regions (git-review--base-revision git-review--patchset)
+                                                     (git-review--current-revision git-review--patchset)
                                                      file
                                                      file)))
       ;; TODO(Niklas Eklund, 20230131): Fix this
@@ -340,8 +343,8 @@
   (let* ((default-directory (project-root (project-current))))
     (vc-diff-internal t
                       (list (vc-responsible-backend default-directory) (list default-directory))
-                      (git-review--base-revision)
-                      (git-review--current-revision))))
+                      (git-review--base-revision git-review--patchset)
+                      (git-review--current-revision git-review--patchset))))
 
 (defun git-review-toggle-conversation ()
   "Toggle conversation."
@@ -793,9 +796,7 @@
   (let* ((updated-patchsets
           (seq-map (lambda (it)
                      (if (equal (plist-get it :number) (plist-get patchset :number))
-                         (progn
-                           (setq found-it t)
-                           patchset)
+                         patchset
                        it))
                    (plist-get git-review--change :patchsets))))
     (setq git-review--change
@@ -836,13 +837,18 @@
   (git-review-setup-project-file-review file)
   (git-review-file))
 
-(defun git-review--current-revision ()
-  "Return the current revision."
-  (plist-get git-review--patchset :commit-hash))
+(defun git-review--current-revision (patchset)
+  "Return the current hash of PATCHSET."
+  (plist-get patchset :commit-hash))
 
-(defun git-review--base-revision ()
-  "Return the base revision."
-  ;; TODO(Niklas Eklund, 20230207): Add functionality to get hash for patchset
+(defun git-review--base-revision (patchset)
+  "Return the base revision for PATCHSET."
+  (if-let* ((patchset-number (plist-get patchset :base-patchset))
+            (base-patchset (seq-find (lambda (it)
+                                       (equal patchset-number
+                                              (plist-get it :number)))
+                                     (plist-get git-review--change :patchsets))))
+      (plist-get base-patchset :commit-hash))
   (plist-get git-review--patchset :parent-hash))
 
 (defun git-review--has-comments-p (file)
@@ -1001,6 +1007,7 @@
                       :current-patchset nil
                       :project ,(git-review--commit-project)
                       :conversations nil
+                      :patchsets nil
                       :files nil)))
     (git-review--add-change change)
     change))
@@ -1016,7 +1023,7 @@
   ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non-nil.
   (let ((files `(:id ,(git-review--patchset-id patchset)
                      :files ,(git-review--generate-patchset-files
-                              (git-review--commit-hash)))))
+                              patchset))))
     (git-review--add-patchset-files files)
     files))
 
@@ -1031,15 +1038,15 @@
     (git-review--add-patchset patchset)
     patchset))
 
-(defun git-review--generate-patchset-files (commit-hash)
-  "Return a list of files in patchset with COMMIT-HASH."
+(defun git-review--generate-patchset-files (patchset)
+  "Return a list of files in patchset with PATCHSET."
   (let* ((files-in-patchset
           (split-string
            (string-trim
             (shell-command-to-string
              (format "git diff --name-status %s..%s"
-                     (concat commit-hash "~1")
-                     commit-hash)))
+                     (git-review--base-revision patchset)
+                     (git-review--current-revision patchset))))
            "\n")))
     (append
      `((:filename "COMMIT_MSG"))
@@ -1077,8 +1084,8 @@
   "Remove rebased files in variable `git-review'."
   (let* ((files-union
           `("COMMIT_MSG"
-            ,@(thread-last `(,(git-review--base-revision)
-                             ,(git-review--current-revision))
+            ,@(thread-last `(,(git-review--base-revision git-review--patchset)
+                             ,(git-review--current-revision git-review--patchset))
                            (seq-map #'git-review-branch-modified-files)
                            (flatten-list))))
          (review-files
@@ -1180,11 +1187,11 @@ Optionally instruct function to SET-FILENAME."
   "Setup buffers for `git-review'."
   (let ((file-info (git-review--file-info)))
     (setq git-review-base-revision-buffer
-          (get-buffer-create (format "%s<%s>" (git-review--base-revision)
+          (get-buffer-create (format "%s<%s>" (git-review--base-revision git-review--patchset)
                                      (file-name-nondirectory (or (plist-get file-info :original-filename)
                                                                  (plist-get file-info :filename))))))
     (setq git-review-current-revision-buffer
-          (get-buffer-create (format "%s<%s>" (git-review--current-revision)
+          (get-buffer-create (format "%s<%s>" (git-review--current-revision git-review--patchset)
                                      (file-name-nondirectory (plist-get file-info :filename)))))
     (with-current-buffer git-review-base-revision-buffer
       (let ((inhibit-read-only t))
