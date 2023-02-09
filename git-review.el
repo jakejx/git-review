@@ -1407,15 +1407,23 @@ Optionally instruct function to SET-FILENAME."
             (start-column . ,(save-excursion (goto-char start-position) (current-column)))
             (end-line . ,(save-excursion (goto-char end-position) (current-line)))
             (end-column . ,(save-excursion (goto-char end-position) (current-column)))))
-         (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
-    ;; TODO(Niklas Eklund, 20230209): Fix so that conversations are
-    ;; properly created when there is a non-nil base-patchset
+         (patchset-side (git-review--buffer-representation (current-buffer))))
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
-          :patchset ,(plist-get git-review--patchset :number)
+          :patchset ,(plist-get patchset-side :patchset)
           :filename ,(git-review--current-file)
           :resolved nil
           :location ,location
-          :side ,side)))
+          :side ,(plist-get patchset-side :side))))
+
+(defun git-review--buffer-representation (buffer)
+  "Return the patchset and side representation of BUFFER."
+  (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
+      `(:side b
+              :patchset ,(if (eq (current-buffer) git-review-base-revision-buffer)
+                             base-patchset
+                           (plist-get git-review--patchset :number)))
+    `(:side ,(if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)
+            :patchset ,(plist-get git-review--patchset :number))))
 
 (defun git-review--add-conversation-overlays (conversation)
   "Add overlays for CONVERSATION."
