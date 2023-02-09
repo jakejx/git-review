@@ -1474,10 +1474,10 @@ Optionally instruct function to SET-FILENAME."
   "Return the patchset and side representation of BUFFER."
   (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
       `(:side b
-              :patchset ,(if (eq (current-buffer) git-review-base-revision-buffer)
+              :patchset ,(if (eq buffer git-review-base-revision-buffer)
                              base-patchset
                            (plist-get git-review--patchset :number)))
-    `(:side ,(if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)
+    `(:side ,(if (eq buffer git-review-base-revision-buffer) 'a 'b)
             :patchset ,(plist-get git-review--patchset :number))))
 
 (defun git-review--add-conversation-overlays (conversation)
