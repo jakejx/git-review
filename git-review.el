@@ -1059,7 +1059,6 @@ Optionally provide a BASE-PATCHSET-NUMBER."
 
 (defun git-review--create-files (patchset)
   "Create PATCHSET files."
-  ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non-nil.
   (let ((files `(:id ,(git-review--patchset-id patchset)
                      :current-file ,nil
                      :files ,(git-review--generate-patchset-files
@@ -1409,6 +1408,8 @@ Optionally instruct function to SET-FILENAME."
             (end-line . ,(save-excursion (goto-char end-position) (current-line)))
             (end-column . ,(save-excursion (goto-char end-position) (current-column)))))
          (side (if (eq (current-buffer) git-review-base-revision-buffer) 'a 'b)))
+    ;; TODO(Niklas Eklund, 20230209): Fix so that conversations are
+    ;; properly created when there is a non-nil base-patchset
     `(:id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))
           :patchset ,(plist-get git-review--patchset :number)
           :filename ,(git-review--current-file)
@@ -1440,9 +1441,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--get-conversation-region-overlay (conversation)
   "Return region overlay for CONVERSATION."
-  (with-current-buffer (if (eq (plist-get conversation :side) 'a)
-                           git-review-base-revision-buffer
-                         git-review-current-revision-buffer)
+  (with-current-buffer (git-review--get-conversation-buffer conversation)
     (or (seq-find (lambda (it)
                     (eq 'region (overlay-get it 'git-review-overlay-type)))
                   (git-review--conversation-overlays conversation))
@@ -1451,9 +1450,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--get-conversation-header-overlay (conversation)
   "Return header overlay for CONVERSATION."
-  (with-current-buffer (if (eq (plist-get conversation :side) 'a)
-                           git-review-base-revision-buffer
-                         git-review-current-revision-buffer)
+  (with-current-buffer (git-review--get-conversation-buffer conversation)
     (save-excursion
       (goto-char (point-min))
       (forward-line (let-alist (plist-get conversation :location) .start-line))
@@ -1463,18 +1460,38 @@ Optionally instruct function to SET-FILENAME."
                     (git-review--conversation-overlays conversation))
           (make-overlay (point) (point))))))
 
+(defun git-review--get-conversation-buffer (conversation)
+  "Get the buffer in which to display CONVERSATION."
+  (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
+      (if (equal base-patchset (plist-get conversation :patchset))
+          git-review-base-revision-buffer
+        git-review-current-revision-buffer)
+    (if (eq (plist-get conversation :side) 'a)
+        git-review-base-revision-buffer
+      git-review-current-revision-buffer)))
+
 (defun git-review--init-conversation-overlays ()
   "Initialize overlays for conversations."
-  ;; TODO(Niklas Eklund, 20230208): Update with a predicate that takes
-  ;; into account that there might be a non-nil base-patchset
-  (let* ((file-conversations (git-review--file-conversations
-                              (git-review--current-file))))
-    (thread-last file-conversations
-                 (seq-filter (lambda (conversation)
-                               (equal (plist-get conversation :patchset)
-                                      (plist-get git-review--patchset :number))))
-                 (seq-do (lambda (conversation)
-                           (git-review--add-conversation-overlays conversation))))))
+  (thread-last (git-review--get-conversations)
+               (seq-filter #'git-review--conversation-viewable-p)
+               (seq-do (lambda (conversation)
+                         (git-review--add-conversation-overlays conversation)))))
+
+(defun git-review--conversation-viewable-p (conversation)
+  "Return t if CONVERSATION is viewable given current review setup."
+  (let ((conversation-patchset (plist-get conversation :patchset)))
+    (when (equal (plist-get conversation :filename)
+                 (git-review--current-file))
+      (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
+          ;; Correct side and patchset
+          (and (equal (plist-get conversation :side) 'b)
+               (or (equal conversation-patchset
+                          (plist-get git-review--patchset :number))
+                   (equal conversation-patchset base-patchset)))
+        ;; Correct patchset
+        (equal
+         conversation-patchset
+         (plist-get git-review--patchset :number))))))
 
 (defun git-review--conversation-summary (conversation)
   "Return summary string for CONVERSATION."
@@ -1496,7 +1513,7 @@ Optionally instruct function to SET-FILENAME."
   "Return the next file after FILE with conversation(s)."
   (let ((conversation))
     (while (setq file (git-review--next-file file))
-      (when-let ((conversations (git-review--file-conversations file)))
+      (when-let ((conversations (git-review--review-conversations file)))
         (setq conversation (seq-first conversations))))
     conversation))
 
@@ -1504,13 +1521,13 @@ Optionally instruct function to SET-FILENAME."
   "Return the previous file before FILE with conversation(s)."
   (let ((conversation))
     (while (setq file (git-review--previous-file file))
-      (when-let ((conversations (git-review--file-conversations file)))
+      (when-let ((conversations (git-review--review-conversations file)))
         (setq conversation (seq-first conversations))))
     conversation))
 
 (defun git-review--file-next-conversation (file)
   "Return next conversation in FILE."
-  (let ((conversations (git-review--file-conversations file))
+  (let ((conversations (git-review--review-conversations file))
         (position (with-current-buffer git-review-current-revision-buffer
                     (point))))
     (thread-last conversations
@@ -1521,7 +1538,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--file-previous-conversation (file)
   "Return next conversation in FILE."
-  (let ((conversations (git-review--file-conversations file))
+  (let ((conversations (git-review--review-conversations file))
         (position (with-current-buffer git-review-current-revision-buffer
                     (point))))
     (thread-last conversations
@@ -1532,7 +1549,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--conversation-start-point (conversation)
   "Return start point of CONVERSATION."
-  (with-current-buffer (git-review--conversation-buffer conversation)
+  (with-current-buffer (git-review--get-conversation-buffer conversation)
     (let-alist (plist-get conversation :location)
       (save-excursion (goto-char (point-min))
                       (forward-line .end-line)
@@ -1541,7 +1558,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--conversation-end-point (conversation)
   "Return end point of CONVERSATION."
-  (with-current-buffer (git-review--conversation-buffer conversation)
+  (with-current-buffer (git-review--get-conversation-buffer conversation)
     (let-alist (plist-get conversation :location)
       (save-excursion (goto-char (point-min))
                       (forward-line .end-line)
@@ -1553,6 +1570,11 @@ Optionally instruct function to SET-FILENAME."
   (seq-filter (lambda (it)
                 (equal (plist-get it :filename) file))
               (git-review--get-conversations)))
+
+(defun git-review--review-conversations (file)
+  "Return conversations on current review FILE."
+  (seq-filter #'git-review--conversation-viewable-p
+              (git-review--file-conversations file)))
 
 (defun git-review--next-file (file)
   "Return next file after FILE."
