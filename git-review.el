@@ -551,11 +551,13 @@
 (defun git-review-select-conversation ()
   "Select a conversation."
   (interactive)
-  ;; TODO(Niklas Eklund, 20230131): Think about how to deal with multi patchset conversations
   (when-let* ((candidates (thread-last (git-review--get-conversations)
-                                       (seq-filter (lambda (it)
-                                                     (equal (plist-get git-review--patchset :number)
-                                                            (plist-get it :patchset))))
+                                       (seq-filter (lambda (conversation)
+                                                     (seq-find (lambda (file)
+                                                                 (equal (plist-get file :filename)
+                                                                        (plist-get conversation :filename)))
+                                                               (git-review--get-files))))
+                                       (seq-filter #'git-review--conversation-viewable-p)
                                        (seq-map (lambda (it)
                                                   `(,(git-review--conversation-summary it) . ,it)))
                                        (git-review--deduplicate-candidates)))
@@ -1480,7 +1482,7 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--init-conversation-overlays ()
   "Initialize overlays for conversations."
-  (thread-last (git-review--get-conversations)
+  (thread-last (git-review--file-conversations (git-review--current-file))
                (seq-filter #'git-review--conversation-viewable-p)
                (seq-do (lambda (conversation)
                          (git-review--add-conversation-overlays conversation)))))
@@ -1488,18 +1490,16 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--conversation-viewable-p (conversation)
   "Return t if CONVERSATION is viewable given current review setup."
   (let ((conversation-patchset (plist-get conversation :patchset)))
-    (when (equal (plist-get conversation :filename)
-                 (git-review--current-file))
-      (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
-          ;; Correct side and patchset
-          (and (equal (plist-get conversation :side) 'b)
-               (or (equal conversation-patchset
-                          (plist-get git-review--patchset :number))
-                   (equal conversation-patchset base-patchset)))
-        ;; Correct patchset
-        (equal
-         conversation-patchset
-         (plist-get git-review--patchset :number))))))
+    (if-let ((base-patchset (plist-get git-review--patchset :base-patchset)))
+        ;; Correct side and patchset
+        (and (equal (plist-get conversation :side) 'b)
+             (or (equal conversation-patchset
+                        (plist-get git-review--patchset :number))
+                 (equal conversation-patchset base-patchset)))
+      ;; Correct patchset
+      (equal
+       conversation-patchset
+       (plist-get git-review--patchset :number)))))
 
 (defun git-review--conversation-summary (conversation)
   "Return summary string for CONVERSATION."
