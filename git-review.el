@@ -103,7 +103,7 @@
   :group 'git-review
   :type 'symbol)
 
-(defcustom git-review-ignore-file-predicates nil
+(defcustom git-review-ignore-file-predicates '(git-review-rebased-file-p)
   "A list of predicates for determining if a file should be ignored."
   :group 'git-review
   :type '(repeat symbol))
@@ -348,39 +348,49 @@
                       files))
       files)))
 
+(defun git-review--detect-rebased-files (files)
+  "Add rebase property to FILES."
+  (if (plist-get git-review--patchset :base-patchset)
+      (seq-map (lambda (file)
+                 (plist-put file :rebased
+                            (git-review-file-rebased-p file)))
+               files)
+    files))
+
+(defun git-review-rebased-file-p (file)
+  "Return t if FILE is rebased."
+  (plist-get file :rebased))
+
 (defun git-review-file-rebased-p (file)
   "Return t if FILE is changed due to a rebase."
   (unless (string= (plist-get file :filename) "COMMIT_MSG")
     (let* ((base-patchset (git-review--base-patchset git-review--patchset))
            (base-current-regions (git-review-hunk-regions (plist-get base-patchset :commit-hash)
                                                           (plist-get git-review--patchset :commit-hash)
-                                                          (plist-get file :original-filename)
+                                                          (or (plist-get file :original-filename)
+                                                              (plist-get file :filename))
                                                           (plist-get file :filename)))
            (current-regions (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
                                                      (plist-get git-review--patchset :parent-hash)
-                                                     (plist-get file :original-filename)
+                                                     (or (plist-get file :original-filename)
+                                                         (plist-get file :filename))
                                                      (plist-get file :filename))))
       (if-let* ((base-file (git-review--get-patchset-file base-patchset (or (plist-get file :original-filename)
                                                                             (plist-get file :filename)))))
           (let ((base-regions (git-review-hunk-regions (plist-get base-patchset :parent-hash)
                                                        (plist-get base-patchset :commit-hash)
-                                                       (plist-get base-file :original-filename)
+                                                       (or (plist-get base-file :original-filename)
+                                                           (plist-get base-file :filename))
                                                        (plist-get base-file :filename))))
-            ;; 'file-in-both
-            ;; TODO(Niklas Eklund, 20230131): Fix this
+            ;; TODO(Niklas Eklund, 20230209): Initially skip this and generate on the fly instead?
             ;; (git-review--update-file file 'review-diff-regions base-current-regions)
             ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
-            (if (or (not (git-review--file-differences-intersect-p base-current-regions
-                                                                   current-regions))
-                    (not (git-review--file-differences-intersect-p base-current-regions
-                                                                   base-regions)))
-                'rebased
-              'not-rebased))
-        (if (not (git-review--file-differences-intersect-p base-current-regions
-                                                           current-regions))
-            'rebased)
-        'not-rebased))))
-;; (seq-map #'git-review-file-rebased-p (git-review--get-files))
+            (and (not (git-review--file-differences-intersect-p base-current-regions
+                                                                current-regions))
+                 (not (git-review--file-differences-intersect-p base-current-regions
+                                                                base-regions))))
+        (not (git-review--file-differences-intersect-p base-current-regions
+                                                       current-regions))))))
 
 ;;;; Commands
 
@@ -1115,9 +1125,10 @@ Optionally provide a BASE-PATCHSET-NUMBER."
   "Create PATCHSET files."
   (let ((files `(:id ,(git-review--patchset-id patchset)
                      :current-file ,nil
-                     :files ,(git-review--remove-unchanged-files
-                              (git-review--generate-patchset-files
-                             patchset)))))
+                     :files ,(git-review--detect-rebased-files
+                              (git-review--remove-unchanged-files
+                                       (git-review--generate-patchset-files
+                                        patchset))))))
     (git-review--add-patchset-files files)
     files))
 
