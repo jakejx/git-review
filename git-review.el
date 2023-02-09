@@ -1043,11 +1043,11 @@ Optionally provide a BASE-PATCHSET-NUMBER."
 (defun git-review--create-change (change-id)
   "Create change with CHANGE-ID."
   (let ((change `(:id ,change-id
-                      :current-patchset nil
+                      :current-patchset ,nil
                       :project ,(git-review--commit-project)
-                      :conversations nil
-                      :patchsets nil
-                      :files nil)))
+                      :conversations ,nil
+                      :patchsets ,nil
+                      :files ,nil)))
     (git-review--add-change change)
     change))
 
@@ -1061,7 +1061,7 @@ Optionally provide a BASE-PATCHSET-NUMBER."
   "Create PATCHSET files."
   ;; TODO(Niklas Eklund, 20230206): Needs to handle when base is non-nil.
   (let ((files `(:id ,(git-review--patchset-id patchset)
-                     :current-file nil
+                     :current-file ,nil
                      :files ,(git-review--generate-patchset-files
                               patchset))))
     (git-review--add-patchset-files files)
