@@ -351,30 +351,32 @@
 (defun git-review-file-rebased-p (file)
   "Return t if FILE is changed due to a rebase."
   (unless (string= (plist-get file :filename) "COMMIT_MSG")
-    (when-let* ((base-patchset (git-review--base-patchset git-review--patchset))
-                (base-file (git-review--get-patchset-file base-patchset (or (plist-get file :original-filename)
+    (let* ((base-patchset (git-review--base-patchset git-review--patchset))
+           (base-current-regions (git-review-hunk-regions (plist-get base-patchset :commit-hash)
+                                                          (plist-get git-review--patchset :commit-hash)
+                                                          (plist-get file :original-filename)
+                                                          (plist-get file :filename)))
+           (current-regions (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
+                                                     (plist-get git-review--patchset :parent-hash)
+                                                     (plist-get file :original-filename)
+                                                     (plist-get file :filename))))
+      (if-let* ((base-file (git-review--get-patchset-file base-patchset (or (plist-get file :original-filename)
                                                                             (plist-get file :filename)))))
-      t
-      ;; (let* ((base-regions (git-review-hunk-regions (plist-get base-patchset :parent-hash)
-      ;;                                               (plist-get base-patchset :commit-hash)
-      ;;                                               (plist-get base-file :original-filename)
-      ;;                                               (plist-get base-file :filename)))
-      ;;        (base-current-regions (git-review-hunk-regions (plist-get base-patchset :commit-hash)
-      ;;                                                       (plist-get git-review--patchset :commit-hash)
-      ;;                                                       (plist-get file :original-filename)
-      ;;                                                       (plist-get file :filename)))
-      ;;        (current-regions (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
-      ;;                                                  (plist-get git-review--patchset :parent-hash)
-      ;;                                                  (plist-get file :original-filename)
-      ;;                                                  (plist-get file :filename))))
-      ;;   ;; TODO(Niklas Eklund, 20230131): Fix this
-      ;;   ;; (git-review--update-file file 'review-diff-regions base-current-regions)
-      ;;   ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
-      ;;   ;; (not
-      ;;   ;;  (git-review--file-differences-intersect-p base-current-regions
-      ;;   ;;                                            current-regions))
-      ;;   )
-      )))
+          (let ((base-regions (git-review-hunk-regions (plist-get base-patchset :parent-hash)
+                                                       (plist-get base-patchset :commit-hash)
+                                                       (plist-get base-file :original-filename)
+                                                       (plist-get base-file :filename))))
+            'file-in-both
+            ;; TODO(Niklas Eklund, 20230131): Fix this
+            ;; (git-review--update-file file 'review-diff-regions base-current-regions)
+            ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
+            ;; (not
+            ;;  (git-review--file-differences-intersect-p base-current-regions
+            ;;                                            current-regions))
+            )
+        ;; Here need to investigate what change is due to, is it rebase?
+        'file-not-in-base))))
+;; (seq-map #'git-review-file-rebased-p (git-review--get-files))
 
 ;;;; Commands
 
