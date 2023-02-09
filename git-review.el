@@ -366,16 +366,20 @@
                                                        (plist-get base-patchset :commit-hash)
                                                        (plist-get base-file :original-filename)
                                                        (plist-get base-file :filename))))
-            'file-in-both
+            ;; 'file-in-both
             ;; TODO(Niklas Eklund, 20230131): Fix this
             ;; (git-review--update-file file 'review-diff-regions base-current-regions)
             ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
-            ;; (not
-            ;;  (git-review--file-differences-intersect-p base-current-regions
-            ;;                                            current-regions))
-            )
-        ;; Here need to investigate what change is due to, is it rebase?
-        'file-not-in-base))))
+            (if (or (not (git-review--file-differences-intersect-p base-current-regions
+                                                                   current-regions))
+                    (not (git-review--file-differences-intersect-p base-current-regions
+                                                                   base-regions)))
+                'rebased
+              'not-rebased))
+        (if (not (git-review--file-differences-intersect-p base-current-regions
+                                                           current-regions))
+            'rebased)
+        'not-rebased))))
 ;; (seq-map #'git-review-file-rebased-p (git-review--get-files))
 
 ;;;; Commands
