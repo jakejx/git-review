@@ -407,6 +407,9 @@
                                                      conversation)))))))
     (if (= 1 (length conversations))
         (car conversations)
+      ;; TODO(Niklas Eklund, 20230210): Should probably add side to
+      ;; annotation to easier distinguish a comment, maybe line as
+      ;; well?
       (git-review-completing-read (git-review--conversation-candidates conversations)
                                   "Select conversation: "
                                   'git-review-conversation
