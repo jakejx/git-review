@@ -1198,32 +1198,6 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                 it))
             (git-review--get-files))))
 
-(defun git-review--remove-rebased-files-from-review ()
-  "Remove rebased files in variable `git-review'."
-  (let* ((files-union
-          `("COMMIT_MSG"
-            ,@(thread-last `(,(git-review--base-revision git-review--patchset)
-                             ,(git-review--current-revision git-review--patchset))
-                           (seq-map #'git-review-branch-modified-files)
-                           (flatten-list))))
-         (review-files
-          (thread-last (git-review--get-files)
-                       (seq-map (lambda (it) (plist-get it :filename)))
-                       (seq-filter (lambda (it)
-                                     (member it files-union)))
-                       ;; TODO(Niklas Eklund, 20230111): Look into the
-                       ;; logic of this, it doesn't seems to always
-                       ;; work
-                       (seq-remove #'git-review-file-rebased-p))))
-    ;; Update `git-review' with files
-    (let ((updated-files (alist-get 'files git-review)))
-      (seq-do (lambda (it)
-                (let ((file (car it)))
-                  (unless (member file review-files)
-                    (setf updated-files (assoc-delete-all file updated-files #'equal)))))
-              updated-files)
-      (setf (alist-get 'files git-review) updated-files))))
-
 (defun git-review--restore-buffer-location (file)
   "Restore buffer location in FILE.
 
