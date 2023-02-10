@@ -381,6 +381,37 @@
 
 ;;;; Commands
 
+(defun git-review-control-toggle-conversation ()
+  "Toggle currently focused conversation."
+  (interactive)
+  (if (frame-live-p git-review--conversation-frame)
+      (progn
+        (make-frame-invisible git-review--conversation-frame t)
+        (kill-buffer "*git-review-conversation*"))
+    (when-let ((conversation (git-review--control-conversation-at-point)))
+      (with-selected-window (get-buffer-window
+                             (git-review--conversation-buffer
+                              conversation))
+        (git-review-toggle-conversation)))))
+
+(defun git-review--control-conversation-at-point ()
+  "Return conversation at point from control buffer."
+  (when-let* ((conversations (seq-remove #'null
+                                         `(,(with-selected-window (get-buffer-window git-review-base-revision-buffer)
+                                              (when-let ((conversation (git-review--conversation-at-point)))
+                                                (and (equal (point) (git-review--conversation-start-point conversation))
+                                                     conversation)))
+                                           ,(with-selected-window (get-buffer-window git-review-current-revision-buffer)
+                                              (when-let ((conversation (git-review--conversation-at-point)))
+                                                (and (equal (point) (git-review--conversation-start-point conversation))
+                                                     conversation)))))))
+    (if (= 1 (length conversations))
+        (car conversations)
+      (git-review-completing-read (git-review--conversation-candidates conversations)
+                                  "Select conversation: "
+                                  'git-review-conversation
+                                  git-review-conversation-annotation))))
+
 (defun git-review-toggle-hide-conversations ()
   "Toggle to hide all conversations with others."
   (interactive)
@@ -599,22 +630,26 @@
 (defun git-review-select-conversation ()
   "Select a conversation."
   (interactive)
-  (when-let* ((candidates (thread-last (git-review--get-conversations)
-                                       (seq-filter (lambda (conversation)
-                                                     (seq-find (lambda (file)
-                                                                 (equal (plist-get file :filename)
-                                                                        (plist-get conversation :filename)))
-                                                               (git-review--get-files))))
-                                       (seq-filter #'git-review--conversation-viewable-p)
-                                       (seq-map (lambda (it)
-                                                  `(,(git-review--conversation-summary it) . ,it)))
-                                       (git-review--deduplicate-candidates)))
+  (when-let* ((candidates (git-review--conversation-candidates
+                           (git-review--get-conversations)))
               (conversation (git-review-completing-read candidates
                                                         "Select conversation: "
                                                         'git-review-conversation
                                                         git-review-conversation-annotation)))
     (git-review--switch-file (plist-get conversation :filename))
     (git-review--move-to-conversation conversation)))
+
+(defun git-review--conversation-candidates (conversations)
+  "Return a list of candidates based on CONVERSATIONS."
+  (thread-last conversations
+               (seq-filter (lambda (conversation)
+                             (seq-find (lambda (file)
+                                         (equal (plist-get file :filename)
+                                                (plist-get conversation :filename)))
+                                       (git-review--get-files))))
+               (seq-filter #'git-review--conversation-viewable-p)
+               (seq-map (lambda (it)
+                          `(,(git-review--conversation-summary it) . ,it)))))
 
 (defun git-review--deduplicate-candidates (candidates)
   "De-duplicate CANDIDATES."
@@ -641,9 +676,12 @@
                  `(,new-str . ,data)))
              candidates)))
 
-(defun git-review-completing-read (candidates prompt category annotation-config)
-  "Select CANDIDATES from CATEGORY with and PROMPT."
-  (when-let* ((git-review--candidates (git-review--harmonize-candidate-lengths candidates))
+(defun git-review-completing-read (candidates prompt category annotation-config &optional multiple)
+  "Select CANDIDATES from CATEGORY with and PROMPT.
+
+Optionally if MULTIPLE is t use `completing-read-multiple'."
+  (when-let* ((deduplicated-candidates (git-review--deduplicate-candidates candidates))
+              (git-review--candidates (git-review--harmonize-candidate-lengths deduplicated-candidates))
               (git-review--annotation-config annotation-config)
               (git-review--annotations (git-review--annotations git-review--candidates))
               (git-review--annotation-widths (git-review--annotation-widths))
@@ -656,8 +694,20 @@
                             (if (eq action 'metadata)
                                 metadata
                               (complete-with-action action git-review--candidates string predicate))))
-              (candidate (completing-read prompt collection nil t)))
-    (cdr (assoc candidate git-review--candidates))))
+              (candidate (if multiple
+                             (completing-read-multiple prompt collection nil t)
+                           (completing-read prompt collection nil t))))
+    (if (listp candidate)
+        (seq-map (lambda (it)
+                   ;; Completing-read multiple strips padding on all but last candidate
+                   (let ((it-without-spaces (string-trim it)))
+                     (thread-last git-review--candidates
+                                  (seq-find (lambda (it2)
+                                              (string-equal it-without-spaces
+                                                            (string-trim (car it2)))))
+                                  (cdr))))
+                 candidate)
+      (cdr (assoc candidate git-review--candidates)))))
 
 (defun git-review-switch-to-most-recent-file ()
   "Switch to most recently reviewed file."
@@ -1809,6 +1859,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "[") #'git-review-previous-file)
     (define-key map (kbd "-") #'git-review-select-patchset)
     (define-key map (kbd "^") #'git-review-switch-to-most-recent-file)
+    (define-key map (kbd "TAB") #'git-review-control-toggle-conversation)
     map))
 
 (define-derived-mode git-review-mode fundamental-mode "Git Review"
