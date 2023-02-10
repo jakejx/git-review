@@ -1060,7 +1060,7 @@
   (let* ((change-id (or change-id
                         (funcall (plist-get git-review--config :change-id))))
          (patchset-number (or patchset-number
-                       (funcall (plist-get git-review--config :patchset)))))
+                              (funcall (plist-get git-review--config :patchset)))))
 
     ;; Change
     (if-let ((change (seq-find (lambda (it)
@@ -1129,8 +1129,8 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                      :current-file ,nil
                      :files ,(git-review--detect-rebased-files
                               (git-review--remove-unchanged-files
-                                       (git-review--generate-patchset-files
-                                        patchset))))))
+                               (git-review--generate-patchset-files
+                                patchset))))))
     (git-review--add-patchset-files files)
     files))
 
@@ -1560,8 +1560,8 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--conversation-buffer (conversation)
   "Return buffer associated with CONVERSATION."
   (if (eq 'a (plist-get conversation :side))
-          git-review-base-revision-buffer
-          git-review-current-revision-buffer))
+      git-review-base-revision-buffer
+    git-review-current-revision-buffer))
 
 (defun git-review--next-conversation-file (file)
   "Return the next file after FILE with conversation(s)."
