@@ -383,8 +383,6 @@
                                                            (plist-get base-file :filename))
                                                        (plist-get base-file :filename))))
             ;; TODO(Niklas Eklund, 20230209): Initially skip this and generate on the fly instead?
-            ;; (git-review--update-file file 'review-diff-regions base-current-regions)
-            ;; (git-review--update-file file 'current-revision-diff-regions current-regions)
             (and (not (git-review--file-differences-intersect-p base-current-regions
                                                                 current-regions))
                  (not (git-review--file-differences-intersect-p base-current-regions
@@ -1037,8 +1035,12 @@
 
 (defun git-review--current-revision-diff-regions ()
   "Return diff regions for file from current revision."
-  (let-alist (git-review--file-info)
-    .current-revision-diff-regions))
+  (let ((file (git-review--file-info (git-review--current-file))))
+    (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
+                             (plist-get git-review--patchset :parent-hash)
+                             (or (plist-get file :original-filename)
+                                 (plist-get file :filename))
+                             (plist-get file :filename))))
 
 (defun git-review--file-info (&optional file)
   "Info about FILE."
@@ -1362,7 +1364,7 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review---maybe-modify-overlays ()
   "Maybe modify overlays if current diff is due to a rebase."
   (when-let* ((is-rebase-diff (and
-                               (git-review--multiple-patchsets-p)
+                               (git-review--base-patchset git-review--patchset)
                                (git-review---rebase-region-p)))
               (update-overlay-fun
                (lambda (side)
