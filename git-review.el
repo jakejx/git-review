@@ -382,7 +382,6 @@
                                                        (or (plist-get base-file :original-filename)
                                                            (plist-get base-file :filename))
                                                        (plist-get base-file :filename))))
-            ;; TODO(Niklas Eklund, 20230209): Initially skip this and generate on the fly instead?
             (and (not (git-review--file-differences-intersect-p base-current-regions
                                                                 current-regions))
                  (not (git-review--file-differences-intersect-p base-current-regions
