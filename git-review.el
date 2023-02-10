@@ -370,22 +370,12 @@
                                                           (or (plist-get file :original-filename)
                                                               (plist-get file :filename))
                                                           (plist-get file :filename)))
-           (current-regions (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
-                                                     (plist-get git-review--patchset :parent-hash)
-                                                     (or (plist-get file :original-filename)
-                                                         (plist-get file :filename))
-                                                     (plist-get file :filename))))
-      (if-let* ((base-file (git-review--get-patchset-file base-patchset (or (plist-get file :original-filename)
-                                                                            (plist-get file :filename)))))
-          (let ((base-regions (git-review-hunk-regions (plist-get base-patchset :parent-hash)
-                                                       (plist-get base-patchset :commit-hash)
-                                                       (or (plist-get base-file :original-filename)
-                                                           (plist-get base-file :filename))
-                                                       (plist-get base-file :filename))))
-            (and (not (git-review--file-differences-intersect-p base-current-regions
-                                                                current-regions))
-                 (not (git-review--file-differences-intersect-p base-current-regions
-                                                                base-regions))))
+           (current-regions (git-review--current-revision-diff-regions file)))
+      (if-let* ((base-regions (git-review--base-revision-diff-regions file)))
+          (and (not (git-review--file-differences-intersect-p base-current-regions
+                                                              current-regions))
+               (not (git-review--file-differences-intersect-p base-current-regions
+                                                              base-regions)))
         (not (git-review--file-differences-intersect-p base-current-regions
                                                        current-regions))))))
 
@@ -1032,22 +1022,20 @@
       (* (/ (float (length reviewed-files)) (length interesting-files)) 100)
     0.0))
 
-(defun git-review--current-revision-diff-regions ()
-  "Return diff regions for file from current revision."
-  (let ((file (git-review--file-info (git-review--current-file))))
-    (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
-                             (plist-get git-review--patchset :parent-hash)
-                             (or (plist-get file :original-filename)
-                                 (plist-get file :filename))
-                             (plist-get file :filename))))
+(defun git-review--current-revision-diff-regions (file)
+  "Return diff regions for FILE from current revision."
+  (git-review-hunk-regions (plist-get git-review--patchset :commit-hash)
+                           (plist-get git-review--patchset :parent-hash)
+                           (or (plist-get file :original-filename)
+                               (plist-get file :filename))
+                           (plist-get file :filename)))
 
-(defun git-review--base-revision-diff-regions ()
-  "Return diff regions for file from current revision."
-  (let* ((base-patchset (git-review--base-patchset git-review--patchset))
-         (file (git-review--file-info (git-review--current-file)))
-         (base-file (git-review--get-patchset-file base-patchset
-                                                   (or (plist-get file :original-filename)
-                                                       (plist-get file :filename)))))
+(defun git-review--base-revision-diff-regions (file)
+  "Return diff regions for FILE from current revision."
+  (when-let* ((base-patchset (git-review--base-patchset git-review--patchset))
+              (base-file (git-review--get-patchset-file base-patchset
+                                                        (or (plist-get file :original-filename)
+                                                            (plist-get file :filename)))))
     (git-review-hunk-regions (plist-get base-patchset :parent-hash)
                              (plist-get base-patchset :commit-hash)
                              (or (plist-get base-file :original-filename)
@@ -1346,10 +1334,12 @@ Optionally instruct function to SET-FILENAME."
       (and
        (not
         (git-review--file-differences-intersect-p file-regions
-                                                  (git-review--current-revision-diff-regions)))
+                                                  (git-review--current-revision-diff-regions
+                                                   (git-review--file-info (git-review--current-file)))))
        (not
         (git-review--file-differences-intersect-p file-regions
-                                                  (git-review--base-revision-diff-regions)))))))
+                                                  (git-review--base-revision-diff-regions
+                                                   (git-review--file-info (git-review--current-file)))))))))
 
 (defun git-review---maybe-modify-overlays ()
   "Maybe modify overlays if current diff is due to a rebase."
