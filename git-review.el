@@ -1042,6 +1042,19 @@
                                  (plist-get file :filename))
                              (plist-get file :filename))))
 
+(defun git-review--base-revision-diff-regions ()
+  "Return diff regions for file from current revision."
+  (let* ((base-patchset (git-review--base-patchset git-review--patchset))
+         (file (git-review--file-info (git-review--current-file)))
+         (base-file (git-review--get-patchset-file base-patchset
+                                                   (or (plist-get file :original-filename)
+                                                       (plist-get file :filename)))))
+    (git-review-hunk-regions (plist-get base-patchset :parent-hash)
+                             (plist-get base-patchset :commit-hash)
+                             (or (plist-get base-file :original-filename)
+                                 (plist-get base-file :filename))
+                             (plist-get base-file :filename))))
+
 (defun git-review--file-info (&optional file)
   "Info about FILE."
   (let ((file (or file (plist-get git-review--files :current-file)))
@@ -1357,9 +1370,13 @@ Optionally instruct function to SET-FILENAME."
            (file-regions
             `((a . ,(funcall current-region-fun ediff-buffer-A 'ediff-current-diff-A))
               (b . ,(funcall current-region-fun ediff-buffer-B 'ediff-current-diff-B)))))
-      (not
-       (git-review--file-differences-intersect-p file-regions
-                                                 (git-review--current-revision-diff-regions))))))
+      (and
+       (not
+        (git-review--file-differences-intersect-p file-regions
+                                                  (git-review--current-revision-diff-regions)))
+       (not
+        (git-review--file-differences-intersect-p file-regions
+                                                  (git-review--base-revision-diff-regions)))))))
 
 (defun git-review---maybe-modify-overlays ()
   "Maybe modify overlays if current diff is due to a rebase."
