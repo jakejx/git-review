@@ -1204,8 +1204,7 @@ there is a previous location to return to."
         (with-selected-window (get-buffer-window git-review-base-revision-buffer)
           (goto-char (alist-get 'a location))))
     (with-selected-window (git-review--control-window)
-      (ediff-next-difference)
-      (git-review--maybe-set-reviewed))))
+      (git-review-next-hunk))))
 
 (defun git-review--control-window ()
   "Return window for variable `ediff-control-buffer'."
