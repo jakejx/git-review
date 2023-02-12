@@ -192,19 +192,20 @@
 
 (defun git-review--update-review ()
   "Update change(s) with change."
-  (git-review--store-buffer-locations)
-  (git-review--update-patchset-files git-review--files)
-  (git-review--update-patchsets git-review--patchset)
+  (unless (plist-get git-review--config :wip)
+    (git-review--store-buffer-locations)
+    (git-review--update-patchset-files git-review--files)
+    (git-review--update-patchsets git-review--patchset)
 
-  ;; Remove remote conversations from local storage
-  (setq git-review--change
-        (plist-put git-review--change :conversations
-                   (seq-remove (lambda (it)
-                                 (plist-get it :remote))
-                               git-review--conversations)))
+    ;; Remove remote conversations from local storage
+    (setq git-review--change
+          (plist-put git-review--change :conversations
+                     (seq-remove (lambda (it)
+                                   (plist-get it :remote))
+                                 git-review--conversations)))
 
-  (git-review--update-changes git-review--change)
-  (git-review-update-db)
+    (git-review--update-changes git-review--change)
+    (git-review-update-db))
 
   ;; Reset variables
   (setq git-review--change nil)
@@ -592,6 +593,16 @@
                                                 git-review-file-annotation)))
     (git-review--switch-file (plist-get file :filename))))
 
+(defun git-review-commit ()
+  "Review the current commit."
+  (interactive)
+  (let ((default-directory (project-root (project-current))))
+    (setq git-review--config `(:project-root ,default-directory
+                                             :change-id ,(lambda () (git-review--commit-hash))
+                                             :patchset ,(lambda () 1)
+                                             :wip t))
+    (git-review--initialize-review))
+  (git-review-start-review))
 
 (defun git-review-select-change ()
   "Select a change."
@@ -753,6 +764,10 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
   "Review a new change."
   (interactive)
   (let* ((default-directory (project-root (project-current))))
+    (setq git-review--config (when (functionp git-review-config)
+                               (plist-put (funcall git-review-config)
+                                          :project-root (project-root
+                                                         (project-current)))))
     (git-review--initialize-review)
     (git-review-start-review)))
 
@@ -1192,7 +1207,8 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                       :conversations ,nil
                       :patchsets ,nil
                       :files ,nil)))
-    (git-review--add-change change)
+    (unless (plist-get git-review--config :wip)
+      (git-review--add-change change))
     change))
 
 (defun git-review--add-change (change)
@@ -1219,7 +1235,8 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                                  :subject ,(git-review--commit-subject)
                                  :author ,(git-review--commit-author)
                                  :number ,number)))
-    (git-review--add-patchset patchset)
+    (unless (plist-get git-review--config :wip)
+      (git-review--add-patchset patchset))
     patchset))
 
 (defun git-review--generate-patchset-files (patchset)
