@@ -593,6 +593,7 @@
                                                 git-review-file-annotation)))
     (git-review--switch-file (plist-get file :filename))))
 
+;;;###autoload
 (defun git-review-commit ()
   "Review the current commit."
   (interactive)
