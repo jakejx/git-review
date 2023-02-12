@@ -76,6 +76,13 @@
   :group 'git-review
   :type 'symbol)
 
+(defcustom git-review-change-annotation
+  '((:name patchsets :function (lambda (elt) (format "PATCHSETS(%s)" (seq-length (plist-get (cdr elt) :patchsets)))) :face 'font-lock-comment-face)
+    (:name author :function (lambda (elt) (plist-get (seq-first (plist-get (cdr elt) :patchsets)) :author)) :face 'font-lock-comment-face))
+  "A list of annotations to display for a change."
+  :group 'git-review
+  :type 'symbol)
+
 (defcustom git-review-patchset-annotation
   '((:name conversations :function git-review--annotation-patchset-conversations :face 'font-lock-comment-face)
     (:name author :function git-review--annotation-patchset-author :face 'font-lock-comment-face)
@@ -584,6 +591,24 @@
                                                 'git-review-file
                                                 git-review-file-annotation)))
     (git-review--switch-file (plist-get file :filename))))
+
+
+(defun git-review-select-change ()
+  "Select a change."
+  (when-let* ((project-name (git-review--commit-project))
+              (candidates (thread-last git-review--changes
+                                       (seq-filter (lambda (change)
+                                                     (equal (plist-get change :project)
+                                                            project-name)))
+                                       (seq-map (lambda (change)
+                                                  (let ((patchset (car (last (plist-get change :patchsets)))))
+                                                    `(,(plist-get patchset :subject) .
+                                                      ,change))))))
+              (change (git-review-completing-read candidates
+                                                  "Select change: "
+                                                  'git-review-change
+                                                  git-review-change-annotation)))
+    change))
 
 (defun git-review-select-patchset ()
   "Select and switch to patchset."
