@@ -1304,9 +1304,9 @@ Optionally instruct function to SET-FILENAME."
   (let* ((re (rx bol (group (regexp ".*?:")) (group (regexp ".*"))))
          (components)
          (pretty-format "Parent:     %p%nAuthor:     %aN <%ae>%nAuthorDate: %ai%nCommit:     %cN <%ce>%nCommitDate: %ci")
+         (command (format "git show --pretty=format:\"%s\" --no-patch %s" pretty-format revision))
          (commit-header (with-temp-buffer
-                          (call-process-shell-command
-                           (format "git show --pretty=format:\"%s\" --no-patch %s" pretty-format revision) nil t)
+                          (call-process-shell-command command nil t)
                           (goto-char (point-min))
                           (while (search-forward-regexp re nil t)
                             (push (concat (propertize (match-string 1) 'face 'font-lock-comment-face)
@@ -1327,10 +1327,12 @@ Optionally instruct function to SET-FILENAME."
                                      (file-name-nondirectory (plist-get file-info :filename)))))
     (with-current-buffer git-review-base-revision-buffer
       (let ((inhibit-read-only t))
-        (erase-buffer)))
+        (erase-buffer)
+        (setq-local default-directory (git-review--project-root))))
     (with-current-buffer git-review-current-revision-buffer
       (let ((inhibit-read-only t))
-        (erase-buffer)))))
+        (erase-buffer)
+        (setq-local default-directory (git-review--project-root))))))
 
 (defun git-review---enable-mode ()
   "Enable filename appropriate mode."
