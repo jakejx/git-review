@@ -389,6 +389,15 @@
 
 ;;;; Commands
 
+(defun git-review-control-kill-conversation ()
+  "Kill currently focused conversation."
+  (interactive)
+  (when-let ((conversation (git-review--control-conversation-at-point)))
+    (with-selected-window (get-buffer-window
+                           (git-review--conversation-buffer
+                            conversation))
+      (git-review-kill-comment))))
+
 (defun git-review-control-toggle-conversation ()
   "Toggle currently focused conversation."
   (interactive)
@@ -1893,6 +1902,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "B") #'git-review-select-base-patchset)
     (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
     (define-key map (kbd "cs") #'git-review-select-conversation)
+    (define-key map (kbd "ck") #'git-review-control-kill-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
