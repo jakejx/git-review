@@ -396,8 +396,8 @@
              (comment (seq-first (seq-reverse (plist-get conversation :comments)))))
     (git-review--edit-comment conversation comment)))
 
-(defun git-review-control-kill-conversation ()
-  "Kill currently focused conversation."
+(defun git-review-control-kill-comment ()
+  "Kill currently focused comment."
   (interactive)
   (when-let ((conversation (git-review--control-conversation-at-point)))
     (with-selected-window (get-buffer-window
@@ -849,23 +849,6 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
                               :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))))))
     (git-review--edit-comment conversation comment)))
 
-(defun git-review--edit-comment (conversation comment)
-  "Edit COMMENT from CONVERSATION."
-  (let ((buffer (get-buffer-create "*git-review-comment*")))
-    (display-buffer buffer git-review-comment-buffer-action)
-    (with-current-buffer buffer
-      (erase-buffer)
-      (when-let ((is-draft (plist-get comment :draft))
-                 (message (plist-get comment :message)))
-        (insert message))
-      (when git-review-comment-major-mode
-        (funcall git-review-comment-major-mode))
-      (git-review-comment-mode)
-      (setq git-review--current-conversation conversation)
-      (setq git-review--current-comment comment)
-      (select-window (get-buffer-window (current-buffer)))
-      (goto-char (point-max)))))
-
 (defun git-review-complete-comment ()
   "Complete the review comment."
   (interactive)
@@ -898,6 +881,23 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
    'kill))
 
 ;;;; Support functions
+
+(defun git-review--edit-comment (conversation comment)
+  "Edit COMMENT from CONVERSATION."
+  (let ((buffer (get-buffer-create "*git-review-comment*")))
+    (display-buffer buffer git-review-comment-buffer-action)
+    (with-current-buffer buffer
+      (erase-buffer)
+      (when-let ((is-draft (plist-get comment :draft))
+                 (message (plist-get comment :message)))
+        (insert message))
+      (when git-review-comment-major-mode
+        (funcall git-review-comment-major-mode))
+      (git-review-comment-mode)
+      (setq git-review--current-conversation conversation)
+      (setq git-review--current-comment comment)
+      (select-window (get-buffer-window (current-buffer)))
+      (goto-char (point-max)))))
 
 (defun git-review--commit-author ()
   "Return the name of the commit author."
@@ -1913,7 +1913,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "B") #'git-review-select-base-patchset)
     (define-key map (kbd "ce") #'git-review-control-edit-comment)
     (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
-    (define-key map (kbd "ck") #'git-review-control-kill-conversation)
+    (define-key map (kbd "ck") #'git-review-control-kill-comment)
     (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
