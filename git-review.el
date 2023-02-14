@@ -389,6 +389,13 @@
 
 ;;;; Commands
 
+(defun git-review-control-edit-comment ()
+  "Edit comment from currently focused conversation."
+  (interactive)
+  (when-let ((conversation (git-review--control-conversation-at-point))
+             (comment (seq-first (seq-reverse (plist-get conversation :comments)))))
+    (git-review--edit-comment conversation comment)))
+
 (defun git-review-control-kill-conversation ()
   "Kill currently focused conversation."
   (interactive)
@@ -839,8 +846,12 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
          (comment (or (seq-first (seq-reverse (plist-get conversation :comments)))
                       `(:user ,git-review-user
                               :draft t
-                              :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds)))))))
-         (buffer (get-buffer-create "*git-review-comment*")))
+                              :id ,(intern (secure-hash 'md5 (number-to-string (time-to-seconds))))))))
+    (git-review--edit-comment conversation comment)))
+
+(defun git-review--edit-comment (conversation comment)
+  "Edit COMMENT from CONVERSATION."
+  (let ((buffer (get-buffer-create "*git-review-comment*")))
     (display-buffer buffer git-review-comment-buffer-action)
     (with-current-buffer buffer
       (erase-buffer)
@@ -1900,9 +1911,10 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "a") #'git-review-jump-to-a)
     (define-key map (kbd "b") #'git-review-jump-to-b)
     (define-key map (kbd "B") #'git-review-select-base-patchset)
+    (define-key map (kbd "ce") #'git-review-control-edit-comment)
     (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
-    (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "ck") #'git-review-control-kill-conversation)
+    (define-key map (kbd "cs") #'git-review-select-conversation)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
