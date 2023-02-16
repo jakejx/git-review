@@ -1733,7 +1733,7 @@ Optionally instruct function to SET-FILENAME."
   (with-current-buffer (git-review--get-conversation-buffer conversation)
     (let-alist (plist-get conversation :location)
       (save-excursion (goto-char (point-min))
-                      (forward-line .end-line)
+                      (forward-line .start-line)
                       (move-to-column .start-column)
                       (point)))))
 
