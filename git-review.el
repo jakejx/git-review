@@ -1660,6 +1660,15 @@ Optionally instruct function to SET-FILENAME."
                (seq-do (lambda (conversation)
                          (git-review--add-conversation-overlays conversation)))))
 
+(defun git-review--highlight-current-conversation ()
+  "Highlight the current conversation."
+  ;; TODO: Improve on this implementation
+  (when-let* ((conversation (git-review--conversation-at-point))
+              (ov (make-overlay (git-review--conversation-start-point conversation)
+                                (git-review--conversation-end-point conversation))))
+    (overlay-put ov 'git-review-overlay-type 'region-highlight)
+    (overlay-put ov 'face 'embark-collect-marked)))
+
 (defun git-review--conversation-viewable-p (conversation)
   "Return t if CONVERSATION is viewable given current review setup."
   (let ((conversation-patchset (plist-get conversation :patchset)))
