@@ -1337,7 +1337,9 @@ Optionally instruct function to SET-FILENAME."
       (setq-local default-directory
                   (file-name-directory
                    (expand-file-name file (git-review--project-root))))
-      (when set-filename
+      (when (and set-filename
+                 (equal (plist-get git-review--patchset :commit-hash)
+                        (git-review--commit-hash)))
         (setq-local buffer-file-name
                     (expand-file-name file (git-review--project-root))))
       (git-review---enable-mode))
