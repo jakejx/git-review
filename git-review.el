@@ -1339,11 +1339,22 @@ Optionally instruct function to SET-FILENAME."
                    (expand-file-name file (git-review--project-root))))
       (when (and set-filename
                  (equal (plist-get git-review--patchset :commit-hash)
-                        (git-review--commit-hash)))
+                        (git-review--commit-hash))
+                 (not (git-review--file-modified-p file)))
         (setq-local buffer-file-name
                     (expand-file-name file (git-review--project-root))))
       (git-review---enable-mode))
     (read-only-mode)))
+
+(defun git-review--file-modified-p (file)
+  "Return t if FILE is currently modified."
+  (string-equal file
+                (string-trim
+                 (with-temp-buffer
+                  (call-process-shell-command
+                   (format "git diff --name-only --diff-filter=M %s" file)
+                   nil t)
+                  (buffer-string)))))
 
 (defun git-review--commit-message (revision buffer)
   "Populate BUFFER with commit message from REVISION."
