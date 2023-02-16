@@ -172,6 +172,22 @@
 
 ;;;; Functions
 
+(defun git-review-source-code ()
+  "Open source code of buffer, if possible."
+  ;; TODO: - Move to correct location.
+  ;;       - Skip opening file if already buffer-file-name is set
+  (let* ((file (git-review--get-file (git-review--current-file)))
+         (patchset (if (equal (current-buffer) git-review-current-revision-buffer)
+                       git-review--patchset
+                     (or (git-review--base-patchset git-review--patchset)
+                         git-review--patchset)))
+         (filename (if (equal (current-buffer) git-review-current-revision-buffer)
+                       (plist-get file :filename)
+                     (or (plist-get file :original-filename)
+                         (plist-get file :filename)))))
+    (when (file-exists-p (expand-file-name filename (git-review--project-root)))
+      (find-file filename))))
+
 (defun git-review-init-db ()
   "Initialize the review database."
   (unless git-review--changes
@@ -389,6 +405,20 @@
                                                        current-regions))))))
 
 ;;;; Commands
+
+(defun git-review-base-source-code ()
+  "Open source code in base window."
+  (interactive)
+  (let ((window (get-buffer-window git-review-base-revision-buffer)))
+    (select-window window)
+    (git-review-source-code)))
+
+(defun git-review-current-source-code ()
+  "Open source code in current window."
+  (interactive)
+  (let ((window (get-buffer-window git-review-current-revision-buffer)))
+    (select-window window)
+    (git-review-source-code)))
 
 (defun git-review-control-edit-comment ()
   "Edit comment from currently focused conversation."
