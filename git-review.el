@@ -103,6 +103,7 @@
 (defcustom git-review-conversation-annotation
   '((:name file :function git-review--annotation-conversation-file :face 'font-lock-string-face)
     (:name user :function git-review--annotation-conversation-starter :face 'font-lock-string-face)
+    (:name location :function git-review--annotation-conversation-location :face 'font-lock-string-face)
     (:name comments :function git-review--annotation-conversation-comments :face 'font-lock-string-face)
     (:name draft :function git-review--annotation-conversation-draft :face 'font-lock-string-face)
     (:name resolved :function git-review--annotation-conversation-resolved :face 'font-lock-string-face))
@@ -422,13 +423,9 @@
   "Return conversation at point from control buffer."
   (when-let* ((conversations (seq-remove #'null
                                          `(,(with-selected-window (get-buffer-window git-review-base-revision-buffer)
-                                              (when-let ((conversation (git-review--conversation-at-point)))
-                                                (and (equal (point) (git-review--conversation-start-point conversation))
-                                                     conversation)))
+                                              (git-review--conversation-at-point))
                                            ,(with-selected-window (get-buffer-window git-review-current-revision-buffer)
-                                              (when-let ((conversation (git-review--conversation-at-point)))
-                                                (and (equal (point) (git-review--conversation-start-point conversation))
-                                                     conversation)))))))
+                                              (git-review--conversation-at-point))))))
     (if (= 1 (length conversations))
         (car conversations)
       ;; TODO(Niklas Eklund, 20230210): Should probably add side to
@@ -1824,6 +1821,12 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--annotation-conversation-file (entry)
   "Return the name of the file the conversation in ENTRY."
   (plist-get (cdr entry) :filename))
+
+(defun git-review--annotation-conversation-location (entry)
+  "Return the location of the conversation in ENTRY."
+  (format "%s:%s"
+          (plist-get (cdr entry) :side)
+          (let-alist (plist-get (cdr entry) :location) .start-line)))
 
 (defun git-review--annotation-conversation-draft (entry)
   "Return draft status on conversation in ENTRY."
