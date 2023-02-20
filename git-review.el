@@ -624,12 +624,27 @@
     (message "No previous file")
     nil))
 
-(defun git-review-select-file ()
-  "Select a file to review."
+(defun git-review-select-sibling-file ()
+  "Select a sibling file to current file."
+  ;; TODO(Niklas Eklund, 20230220): Consider add this to README since it has dependency to Emacs29
   (interactive)
+  (if-let* ((default-directory (git-review--project-root))
+            (review-files (seq-map (lambda (it) (plist-get it :filename)) (git-review--get-files)))
+            (sibling-files (with-temp-buffer
+                             (hack-dir-local-variables-non-file-buffer)
+                             (thread-last (find-sibling-file-search (expand-file-name (git-review--current-file)))
+                                          (seq-map #'file-relative-name)
+                                          (seq-filter (lambda (file) (member file review-files)))))))
+    (git-review-select-file (seq-map #'git-review--get-file sibling-files))
+    (message "No sibling file found.")))
+
+(defun git-review-select-file (files)
+  "Select a file to review from FILES."
+  (interactive
+   (list (git-review--get-files)))
   (when-let* ((candidates (seq-map (lambda (file)
                                      `(,(plist-get file :filename) . ,file))
-                                   (git-review--get-files)))
+                                   files))
               (file (git-review-completing-read candidates
                                                 "Select file: "
                                                 'git-review-file
@@ -1974,6 +1989,7 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "f") #'git-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
     (define-key map (kbd "gb") #'ediff-jump-to-difference-at-point)
+    (define-key map (kbd "o") #'git-review-select-sibling-file)
     (define-key map (kbd "q") #'git-review-quit)
     (define-key map (kbd "S") #'git-review-submit-review)
     (define-key map (kbd "n") #'git-review-next-hunk)
