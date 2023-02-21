@@ -121,6 +121,11 @@
   :group 'git-review
   :type '(repeat symbol))
 
+(defcustom git-review-project-name-regexp (rx bol (regexp ".*/") (group (regexp ".*$")))
+  "A regular expression to deduce the project name from a remote.origin.url."
+  :group 'git-review
+  :type 'string)
+
 ;;;; Public
 
 (defvar git-review nil
@@ -946,12 +951,12 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
 
 (defun git-review--commit-project ()
   "Return name of current project."
-  (with-temp-buffer
-    (call-process-shell-command "git config --local remote.origin.url" nil t)
-    (string-trim
-     (car
-      (last
-       (split-string (buffer-string) "/" t))))))
+  (let* ((url
+          (with-temp-buffer
+            (call-process-shell-command "git config --local remote.origin.url" nil t)
+            (string-trim (buffer-string)))))
+    (and (string-match git-review-project-name-regexp url)
+         (match-string 1 url))))
 
 (defun git-review--commit-parent-hash ()
   "Return parent commit hash."
