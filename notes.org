@@ -141,7 +141,34 @@ Updating an existing change with =push= and =seq-remove=.
 | :id | 1 | :name | katarina |
 | :id | 2 | :name | tira     |
 
-** Workflows
+* Design decisions
 
-- Opening patchset3 of a change. The review should contain remote comments if there are any. The user should be able to switch the base patchset which by default is nil and replace it with patchset2. This should alter which files are being list. It should also update the progress given that the number of interesting files could have changed. If the current file is still of interest it should be kept as the currently viewed file, otherwise it should switch to commit message. When the base change it will alter which comments that gets displayed. It will also alter the files that are being tagged as unchanged or rebased.
+** Conversations can not overlap
+
+To simplify the code conversations are assumed to never overlap with another. This simplifies the implementation when it comes to decision about which conversation to highlight or open when a user's point is on a conversation region.
+
+** Only one review at a time
+
+The user can not review more than one change at a time. Since the package features a highly capable resume it is favorable if the user quits the review before switching. Because the package lacks a buffer that is kept throughout the review it is difficult to keep track of the review without using a global state and hence limiting the possibility of having multiple active reviews.
+
+* Experiments
+** Overlays
+
+#+begin_src elisp
+  (defun foo-overlay ()
+    (interactive)
+    (let* ((ov (make-overlay (point-min) (+ (point-min) 30)))
+           (map (make-sparse-keymap)))
+      (define-key map [follow-link] (kbd "<mouse-1>"))
+      (define-key map (kbd "<mouse-1>")
+                  (lambda (&rest args)
+                    (interactive)
+                    (message "Clicked on overlay")))
+      (overlay-put ov 'before-string (propertize "Hello there\n" 'cursor t))
+      (overlay-put ov 'face 'error)
+      (overlay-put ov 'keymap map)))
+#+end_src
+
+#+RESULTS:
+: foo-overlay
 
