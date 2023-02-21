@@ -174,19 +174,15 @@
 
 (defun git-review-source-code ()
   "Open source code of buffer, if possible."
-  ;; TODO: - Move to correct location.
-  ;;       - Skip opening file if already buffer-file-name is set
   (let* ((file (git-review--get-file (git-review--current-file)))
-         (patchset (if (equal (current-buffer) git-review-current-revision-buffer)
-                       git-review--patchset
-                     (or (git-review--base-patchset git-review--patchset)
-                         git-review--patchset)))
-         (filename (if (equal (current-buffer) git-review-current-revision-buffer)
-                       (plist-get file :filename)
-                     (or (plist-get file :original-filename)
-                         (plist-get file :filename)))))
+         (line (current-line))
+         (column (current-column))
+         (filename (plist-get file :filename)))
     (when (file-exists-p (expand-file-name filename (git-review--project-root)))
-      (find-file filename))))
+      (find-file filename)
+      (goto-char (point-min))
+      (forward-line line)
+      (move-to-column column))))
 
 (defun git-review-init-db ()
   "Initialize the review database."
@@ -1989,6 +1985,8 @@ Optionally instruct function to SET-FILENAME."
     (define-key map (kbd "ch") #'git-review-toggle-hide-conversations)
     (define-key map (kbd "ck") #'git-review-control-kill-comment)
     (define-key map (kbd "cs") #'git-review-select-conversation)
+    (define-key map (kbd "ea") #'git-review-base-source-code)
+    (define-key map (kbd "eb") #'git-review-current-source-code)
     (define-key map (kbd "d") #'git-review-open-patchset-diff)
     (define-key map (kbd "f") #'git-review-select-file)
     (define-key map (kbd "ga") #'ediff-jump-to-difference-at-point)
