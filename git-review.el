@@ -239,6 +239,7 @@
                        (mapcar (lambda (tab)
                                  (alist-get 'name tab))
                                (tab-bar-tabs))))
+      ;; TODO: Make tab-bar integration optional
       (tab-bar-new-tab)
       (tab-bar-rename-tab git-review-tab)
       (git-review-setup-project-file-review
