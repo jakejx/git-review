@@ -1828,7 +1828,8 @@ Optionally instruct function to SET-FILENAME."
     (let-alist (plist-get conversation :location)
       (save-excursion (goto-char (point-min))
                       (forward-line .start-line)
-                      (move-to-column .start-column)
+                      (if .start-column (move-to-column .start-column)
+                        (back-to-indentation))
                       (point)))))
 
 (defun git-review--conversation-end-point (conversation)
@@ -1837,7 +1838,8 @@ Optionally instruct function to SET-FILENAME."
     (let-alist (plist-get conversation :location)
       (save-excursion (goto-char (point-min))
                       (forward-line .end-line)
-                      (move-to-column .end-column)
+                      (if .end-column (move-to-column .end-column)
+                        (forward-to-indentation))
                       (point)))))
 
 (defun git-review--file-conversations (file)
