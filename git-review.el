@@ -251,6 +251,12 @@
           :filename)))
       (git-review-file))))
 
+(defun git-review--commit-exist-p (patchset)
+  "Return t if PATCHSET's commit exist locally."
+  (= 0
+     (call-process-shell-command (format "git show --no-patch %s"
+                                         (plist-get patchset :commit-hash)))))
+
 (defun git-review-setup-project-file-review (file)
   "Setup `git-review' for project FILE review."
   (setq git-review--files (plist-put git-review--files :current-file file))
@@ -338,6 +344,19 @@
             (push region  hunk-regions-b)))))
     `((a . ,hunk-regions-a)
       (b . ,hunk-regions-b))))
+
+(defun git-review--get-patchsets ()
+  "Return a list of patchsets."
+  (when-let* ((remote-patchsets-fun (plist-get git-review--config :remote-patchsets))
+              (remote-patchsets (funcall remote-patchsets-fun)))
+    (seq-do (lambda (remote-patchset)
+              (unless (seq-find (lambda (local-patchset)
+                                  (equal (plist-get local-patchset :number)
+                                         (plist-get remote-patchset :number)))
+                                (plist-get git-review--change :patchsets))
+                (git-review--add-patchset remote-patchset)))
+            remote-patchsets))
+  (plist-get git-review--change :patchsets))
 
 (defun git-review--get-patchset-file (patchset filename)
   "Get file with FILENAME from PATCHSET."
@@ -676,7 +695,7 @@
                                                      (equal (plist-get change :project)
                                                             project-name)))
                                        (seq-map (lambda (change)
-                                                  (let ((patchset (car (last (plist-get change :patchsets)))))
+                                                  (let ((patchset (car (last (git-review--get-patchsets)))))
                                                     `(,(plist-get patchset :subject) .
                                                       ,change))))))
               (change (git-review-completing-read candidates
@@ -688,7 +707,7 @@
 (defun git-review-select-patchset ()
   "Select and switch to patchset."
   (interactive)
-  (when-let* ((candidates (thread-last (plist-get git-review--change :patchsets)
+  (when-let* ((candidates (thread-last (git-review--get-patchsets)
                                        (seq-reverse)
                                        (seq-map (lambda (patchset)
                                                   `(,(number-to-string (plist-get patchset :number)) .
@@ -709,7 +728,7 @@
   "Select the base patchset."
   (interactive)
   (when-let* ((patchset git-review--patchset)
-              (candidates (thread-last (plist-get git-review--change :patchsets)
+              (candidates (thread-last (git-review--get-patchsets)
                                        (seq-remove (lambda (it)
                                                      (equal (plist-get it :number)
                                                             (plist-get git-review--patchset :number))))
@@ -1255,11 +1274,24 @@ Optionally provide a BASE-PATCHSET-NUMBER."
   (setq git-review--patchset (plist-put git-review--patchset :base-patchset base-patchset-number))
 
   ;; Files
+  (git-review--maybe-fetch-patchsets git-review--patchset
+                                     (git-review--base-patchset git-review--patchset))
   (if-let ((files (git-review--get-patchset-files git-review--patchset)))
       (setq git-review--files files)
     (setq git-review--files (git-review--create-files git-review--patchset))
     (git-review--add-metadata-to-files)
     (git-review--add-ignore-tag-to-files)))
+
+(defun git-review--maybe-fetch-patchsets (current-patchset base-patchset)
+  "Maybe fetch CURRENT-PATCHSET or BASE-PATCHSET."
+  (let* ((default-directory (git-review--project-root))
+         (fetch-lambda (lambda (patchset)
+                         (when patchset
+                           (unless (git-review--commit-exist-p patchset)
+                             (if-let ((patchset-fetcher (plist-get git-review--config :fetcher)))
+                                 (funcall patchset-fetcher patchset)
+                               (error "Missing patchset locally and no idea how to fetch it")))))))
+    (seq-do fetch-lambda `(,current-patchset ,base-patchset))))
 
 (defun git-review--patchset-id (patchset)
   "Return the ID of PATCHSET review."
