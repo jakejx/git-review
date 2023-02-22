@@ -398,6 +398,9 @@
                                                               (plist-get file :filename))
                                                           (plist-get file :filename)))
            (current-regions (git-review--current-revision-diff-regions file)))
+      ;; TODO(Niklas Eklund, 20230222): There is something wrong here,
+      ;; some files incorrectly gets labeled as rebased but
+      ;; `git-review--rebase-region-p' does the correct thing
       (if-let* ((base-regions (git-review--base-revision-diff-regions file)))
           (and (not (git-review--file-differences-intersect-p base-current-regions
                                                               current-regions))
