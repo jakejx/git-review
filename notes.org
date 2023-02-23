@@ -171,4 +171,10 @@ The user can not review more than one change at a time. Since the package featur
 
 #+RESULTS:
 : foo-overlay
+* Improvements
+
+- [ ] Refactor code to avoid code duplication
+- [ ] Add convenient functions to reduce code
+- [ ] Add proper faces for users to control the design
+
 
