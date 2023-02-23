@@ -562,7 +562,7 @@
     (goto-char (git-review--conversation-start-point conversation))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
-                 (frame-width (* (window-font-width) 120))
+                 (frame-width (round (* 0.8 (window-pixel-width))))
                  (frame-height (min (* (line-pixel-height) line-count)
                                     (- window-y-end (cdr (window-absolute-pixel-position (point))))))
                  (x-position (- (car (window-absolute-pixel-position (save-excursion (beginning-of-line) (point)))) frame-x-start))
