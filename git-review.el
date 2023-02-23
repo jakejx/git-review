@@ -565,7 +565,7 @@
                  (frame-width (* (window-font-width) 120))
                  (frame-height (min (* (line-pixel-height) line-count)
                                     (- window-y-end (cdr (window-absolute-pixel-position (point))))))
-                 (x-position (- (car (window-absolute-pixel-position (point))) frame-x-start))
+                 (x-position (- (car (window-absolute-pixel-position (save-excursion (beginning-of-line) (point)))) frame-x-start))
                  (y-position (- (cdr (window-absolute-pixel-position (point))) (window-font-height))))
       (set-frame-size frame frame-width frame-height t)
       (set-frame-position frame  x-position y-position))))
