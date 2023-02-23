@@ -612,9 +612,11 @@
     (git-review---maybe-modify-overlays))
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
     (goto-char (git-review--conversation-start-point conversation))
+    (git-review--highlight-current-conversation)
     (recenter))
   (with-selected-window (get-buffer-window git-review-base-revision-buffer)
     (goto-char (git-review--conversation-start-point conversation))
+    (git-review--highlight-current-conversation)
     (recenter)))
 
 (defun git-review-next-hunk ()
@@ -623,14 +625,22 @@
   (git-review--restore-overlays)
   (ediff-next-difference)
   (git-review---maybe-modify-overlays)
-  (git-review--maybe-set-reviewed))
+  (git-review--maybe-set-reviewed)
+  (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+    (git-review--highlight-current-conversation))
+  (with-selected-window (get-buffer-window git-review-base-revision-buffer)
+    (git-review--highlight-current-conversation)))
 
 (defun git-review-previous-hunk ()
   "Go to previous hunk."
   (interactive)
   (git-review--restore-overlays)
   (ediff-previous-difference)
-  (git-review---maybe-modify-overlays))
+  (git-review---maybe-modify-overlays)
+  (with-selected-window (get-buffer-window git-review-current-revision-buffer)
+    (git-review--highlight-current-conversation))
+  (with-selected-window (get-buffer-window git-review-base-revision-buffer)
+    (git-review--highlight-current-conversation)))
 
 (defun git-review-next-file ()
   "Review next file."
@@ -1747,12 +1757,41 @@ Optionally instruct function to SET-FILENAME."
 
 (defun git-review--highlight-current-conversation ()
   "Highlight the current conversation."
-  ;; TODO: Improve on this implementation
+  ;; Delete existing
+  (when-let* ((buffer-overlays (overlays-in (point-min) (point-max)))
+              (current-conversation-overlay
+               (seq-find (lambda (overlay)
+                           (overlay-get overlay
+                                        'git-review-current-conversation))
+                         buffer-overlays))
+              (current-conversation (seq-find (lambda (conversation)
+                                                (equal (overlay-get current-conversation-overlay 'git-review-conversation-id)
+                                                       (plist-get conversation :id)))
+                                              git-review--conversations)))
+    (git-review--add-conversation-overlays current-conversation)
+    (delete-overlay current-conversation-overlay))
+  ;; Add new if needed
   (when-let* ((conversation (git-review--conversation-at-point))
               (ov (make-overlay (git-review--conversation-start-point conversation)
                                 (git-review--conversation-end-point conversation))))
     (overlay-put ov 'git-review-overlay-type 'region-highlight)
-    (overlay-put ov 'face 'embark-collect-marked)))
+    (overlay-put ov 'git-review-current-conversation t)
+    (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
+    (overlay-put ov 'face 'embark-collect-marked)
+    ;; Update existing summary
+    ;; TODO: This code is duplicated refactor
+    (let* ((ov (git-review--get-conversation-header-overlay conversation))
+         (first-comment (seq-first (plist-get conversation :comments)))
+         (last-comment (car (last (plist-get conversation :comments))))
+         (time (when (plist-get first-comment :timestamp)
+                 (format-time-string "%Y-%m-%d %a %H:%M:%S" (plist-get first-comment :timestamp))))
+         (draft (plist-get last-comment :draft))
+         (summary (git-review--conversation-summary conversation))
+         (comment-header
+          (concat (plist-get first-comment :user) ": " summary (when time " " time) (when draft " DRAFT") "\n")))
+    (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
+    (overlay-put ov 'git-review-overlay-type 'header)
+    (overlay-put ov 'before-string (propertize comment-header 'face 'consult-highlight-match)))))
 
 (defun git-review--conversation-viewable-p (conversation)
   "Return t if CONVERSATION is viewable given current review setup."
@@ -2081,7 +2120,8 @@ Optionally instruct function to SET-FILENAME."
             (define-key map (kbd "C-c C-'") #'git-review-conversation-dwim)
             (define-key map (kbd "C-c C-k") #'git-review-kill-comment)
             (define-key map (kbd "<tab>") #'git-review-toggle-conversation)
-            map))
+            map)
+  (add-hook 'post-command-hook #'git-review--highlight-current-conversation nil t))
 
 (provide 'git-review)
 
