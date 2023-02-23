@@ -527,8 +527,6 @@
                              (visibility . nil)
                              (desktop-dont-save . t)
                              (tab-bar-lines . 0)
-                             ;; TODO: Conditionally use scroll-bar if conversation is long
-                             ;; (vertical-scroll-bars . t)
                              (tool-bar-lines . 0)
                              (menu-bar-lines . 0))))
              (buffer (get-buffer-create "*git-review-conversation*"))
@@ -577,6 +575,7 @@
                                          (window-font-height)))
                  (y-position-upward (- (cdr (window-absolute-pixel-position (point)))
                                        frame-height)))
+      ;; (set-frame-parameter frame 'vertical-scroll-bars t)
       (set-frame-size frame frame-width frame-height t)
       (set-frame-position frame  x-position (if (< y-position-upward 0) y-position-downward y-position-upward)))))
 
