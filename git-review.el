@@ -557,18 +557,29 @@
 
 (defun git-review--conversation-frame-configure-size (frame conversation line-count)
   "Configure size of FRAME using info from CONVERSATION and LINE-COUNT."
+  ;; This functions prefer to place child frame before the highlight if possible
   (save-excursion
     ;; TODO: Improve by determining position on screen to know if window should be up or down
     (goto-char (git-review--conversation-start-point conversation))
     (pcase-let* ((`(,frame-x-start ,_ ,_ ,_) (frame-edges (selected-frame)))
                  (`(,_ ,_ ,_ ,window-y-end) (window-edges (selected-window) t t t))
+                 ;; Determine width and height of the window
                  (frame-width (round (* 0.8 (window-pixel-width))))
                  (frame-height (min (* (line-pixel-height) line-count)
                                     (- window-y-end (cdr (window-absolute-pixel-position (point))))))
+                 ;; Let's start at beginning of line
                  (x-position (- (car (window-absolute-pixel-position (save-excursion (beginning-of-line) (point)))) frame-x-start))
-                 (y-position (- (cdr (window-absolute-pixel-position (point))) (window-font-height))))
+                 ;; Calculate what start position in y axis should be if placed below or above
+                 (y-position-downward (+ (cdr (window-absolute-pixel-position
+                                               (save-excursion (goto-char (git-review--conversation-end-point conversation))
+                                                               (beginning-of-line)
+                                                               (point))))
+                                         (window-font-height)))
+                 (y-position-upward (- (cdr (window-absolute-pixel-position (point)))
+                                       frame-height)))
       (set-frame-size frame frame-width frame-height t)
-      (set-frame-position frame  x-position y-position))))
+      (set-frame-position frame  x-position (if (< y-position-upward 0) y-position-downward y-position-upward)))))
+
 
 (defun git-review-quit ()
   "Quit `git-review' review."
