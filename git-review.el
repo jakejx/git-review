@@ -1791,7 +1791,7 @@ Optionally instruct function to SET-FILENAME."
           (concat (plist-get first-comment :user) ": " summary (when time " " time) (when draft " DRAFT") "\n")))
     (overlay-put ov 'git-review-conversation-id (plist-get conversation :id))
     (overlay-put ov 'git-review-overlay-type 'header)
-    (overlay-put ov 'before-string (propertize comment-header 'face 'consult-highlight-match)))))
+    (overlay-put ov 'before-string (propertize comment-header 'face 'embark-collect-marked)))))
 
 (defun git-review--conversation-viewable-p (conversation)
   "Return t if CONVERSATION is viewable given current review setup."
