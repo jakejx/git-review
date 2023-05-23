@@ -617,19 +617,23 @@
   "Move to CONVERSATION."
   (git-review--restore-overlays)
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-    (goto-char (git-review--conversation-start-point conversation)))
+    (unless (string-equal (buffer-string) "")
+      (goto-char (git-review--conversation-start-point conversation))))
   (with-selected-window (git-review--control-window)
     (let ((last-command-event ?b))
-      (ediff-jump-to-difference-at-point nil))
+      (unless (string-equal (buffer-string) "")
+        (ediff-jump-to-difference-at-point nil)))
     (git-review---maybe-modify-overlays))
   (with-selected-window (get-buffer-window git-review-current-revision-buffer)
-    (goto-char (git-review--conversation-start-point conversation))
-    (git-review--highlight-current-conversation)
-    (recenter))
+    (unless (string-equal (buffer-string) "")
+      (goto-char (git-review--conversation-start-point conversation))
+      (git-review--highlight-current-conversation)
+      (recenter)))
   (with-selected-window (get-buffer-window git-review-base-revision-buffer)
-    (goto-char (git-review--conversation-start-point conversation))
-    (git-review--highlight-current-conversation)
-    (recenter)))
+    (unless (string-equal (buffer-string) "")
+      (goto-char (git-review--conversation-start-point conversation))
+      (git-review--highlight-current-conversation)
+      (recenter))))
 
 (defun git-review-next-hunk ()
   "Go to next hunk."
@@ -696,6 +700,20 @@
                                                 'git-review-file
                                                 git-review-file-annotation)))
     (git-review--switch-file (plist-get file :filename))))
+
+(defun git-review-open-change (change)
+  "Open CHANGE."
+  ;; TODO(Niklas Eklund, 20230212): Still on the fence about this function
+  (interactive
+   (list (git-review-select-change)))
+  (when change
+    (let* ((default-directory (project-root (project-current))))
+      (setq git-review--config
+            `(:project-root ,(project-root
+                              (project-current))))
+      (git-review--initialize-review (plist-get change :id)
+                                     (plist-get change :current-patchset))
+      (git-review-start-review))))
 
 ;;;###autoload
 (defun git-review-commit ()
@@ -1838,7 +1856,8 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--next-conversation-file (file)
   "Return the next file after FILE with conversation(s)."
   (let ((conversation))
-    (while (setq file (git-review--next-file file))
+    (while (and (not conversation)
+                (setq file (git-review--next-file file)))
       (when-let ((conversations (git-review--review-conversations file)))
         (setq conversation (seq-first conversations))))
     conversation))
@@ -1846,7 +1865,8 @@ Optionally instruct function to SET-FILENAME."
 (defun git-review--previous-conversation-file (file)
   "Return the previous file before FILE with conversation(s)."
   (let ((conversation))
-    (while (setq file (git-review--previous-file file))
+    (while (and (not conversation)
+                (setq file (git-review--previous-file file)))
       (when-let ((conversations (git-review--review-conversations file)))
         (setq conversation (seq-first conversations))))
     conversation))
