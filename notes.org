@@ -1,26 +1,10 @@
 * Architecture
 
-** Variables
+The idea with the =git-review= package is that it brings an interface for reviewing =git= patches inside of *Emacs*. This is made possible by building upon the builtin =ediff= package. By performing reviews on git patches directly in Emacs we can leverage all the existing tools for software development inside of the review process.
 
-Public variables.
+The package allows users to go to definitions, lookup references, view documentation and much while reviewing. The package is designed so that extensions can be built which integrates with forges in order to *download pull requests*, view and post *patchset comments*.
 
-#+begin_src elisp
-  (defvar git-review-change-id nil "The unique id of a change.")
-  (defvar git-review-patchset nil "The patchset of the current change.")
-  (defvar git-review-project nil "The name of the current project.")
-  (defvar git-review-add-remote-conversations nil "Function that returns remote conversations.")
-#+end_src
-
-Private variables.
-
-#+begin_src elisp
-  (defvar git-review--changes nil "All changes.")
-  (defvar git-review--change nil "The current change.")
-  (defvar git-review--patchset nil "The current patchset.")
-  (defvar git-review--rebased-files nil "List of files that are rebased.")
-  (defvar git-review--unchanged-files nil "List of files that are unchanged.")
-  (defvar git-review--conversations nil "List of conversations.")
-#+end_src
+* Old
 
 ** Data structures
 
@@ -102,6 +86,28 @@ A metadata is a property list.
         :unchanged-files ("baz.cpp"))
 #+end_src
 
+** Variables
+
+Public variables.
+
+#+begin_src elisp
+  (defvar git-review-change-id nil "The unique id of a change.")
+  (defvar git-review-patchset nil "The patchset of the current change.")
+  (defvar git-review-project nil "The name of the current project.")
+  (defvar git-review-add-remote-conversations nil "Function that returns remote conversations.")
+#+end_src
+
+Private variables.
+
+#+begin_src elisp
+  (defvar git-review--changes nil "All changes.")
+  (defvar git-review--change nil "The current change.")
+  (defvar git-review--patchset nil "The current patchset.")
+  (defvar git-review--rebased-files nil "List of files that are rebased.")
+  (defvar git-review--unchanged-files nil "List of files that are unchanged.")
+  (defvar git-review--conversations nil "List of conversations.")
+#+end_src
+
 ** Implementation details
 
 Updating an existing change with =pushnew= doesn't work.
@@ -141,18 +147,18 @@ Updating an existing change with =push= and =seq-remove=.
 | :id | 1 | :name | katarina |
 | :id | 2 | :name | tira     |
 
-* Design decisions
+** Design decisions
 
-** Conversations can not overlap
+*** Conversations can not overlap
 
 To simplify the code conversations are assumed to never overlap with another. This simplifies the implementation when it comes to decision about which conversation to highlight or open when a user's point is on a conversation region.
 
-** Only one review at a time
+*** Only one review at a time
 
 The user can not review more than one change at a time. Since the package features a highly capable resume it is favorable if the user quits the review before switching. Because the package lacks a buffer that is kept throughout the review it is difficult to keep track of the review without using a global state and hence limiting the possibility of having multiple active reviews.
 
-* Experiments
-** Overlays
+** Experiments
+*** Overlays
 
 #+begin_src elisp
   (defun foo-overlay ()
@@ -171,7 +177,7 @@ The user can not review more than one change at a time. Since the package featur
 
 #+RESULTS:
 : foo-overlay
-* Improvements
+** Improvements
 
 - [ ] Refactor code to avoid code duplication
 - [ ] Add convenient functions to reduce code
