@@ -1516,12 +1516,14 @@ Optionally instruct function to SET-FILENAME."
   (let ((file-info (git-review--file-info)))
     (setq git-review-base-revision-buffer
           (get-buffer-create (format "%s.~%s~"
-                                     (or (plist-get file-info :original-filename)
-                                         (plist-get file-info :filename))
+                                     (file-name-nondirectory
+                                      (or (plist-get file-info :original-filename)
+                                          (plist-get file-info :filename)))
                                      (truncate-string-to-width (git-review--base-revision git-review--patchset) 7))))
     (setq git-review-current-revision-buffer
           (get-buffer-create (format "%s.~%s~"
-                                     (plist-get file-info :filename)
+                                     (file-name-nondirectory
+                                      (plist-get file-info :filename))
                                      (truncate-string-to-width (git-review--current-revision git-review--patchset) 7))))
     (with-current-buffer git-review-base-revision-buffer
       (let ((inhibit-read-only t))
