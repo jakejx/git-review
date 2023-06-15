@@ -4,6 +4,21 @@ The idea with the =git-review= package is that it brings an interface for review
 
 The package allows users to go to definitions, lookup references, view documentation and much while reviewing. The package is designed so that extensions can be built which integrates with forges in order to *download pull requests*, view and post *patchset comments*.
 
+* Technical debt
+** TODO Make dependency on tab-bar optional
+
+The user might prefer to use *tab-bar*, *tabspaces* or some other solution for workspaces, or not use workspaces at all. The implemented solution should work without tabs by default but support addition for users that use them.
+
+** TODO Generalize implementation for other files
+
+Currently the package uses *sibling-files* to allow to jump to *other files*. There are other solutions for this and *sibling-files* is only introduced in *Emacs29* therefore make this optional by adding a =other-files-fun= variable.
+
+Instead move current implementation to the =README.md=.
+
+** TODO Modularize code-base
+
+Split code base into multiple files to more easily manage the code base. Some parts of the functionality is more mature then other and it would feel good to isolate the different parts.
+
 * Old
 
 ** Data structures
