@@ -279,7 +279,8 @@
       (unless (string-equal "D" type)
         (git-review--file-content (git-review--current-revision git-review--patchset)
                                   file
-                                  git-review-current-revision-buffer t)))))
+                                  git-review-current-revision-buffer t))
+      (git-review---enable-mode))))
 
 (defun git-review-file ()
   "Review current file."
@@ -1465,7 +1466,7 @@ Optionally instruct function to SET-FILENAME."
                  (not (git-review--file-modified-p file)))
         (setq-local buffer-file-name
                     (expand-file-name file (git-review--project-root))))
-      (git-review---enable-mode))
+      (normal-mode))
     (read-only-mode)))
 
 (defun git-review--file-modified-p (file)
@@ -1535,14 +1536,12 @@ Optionally instruct function to SET-FILENAME."
         (setq-local default-directory (git-review--project-root))))))
 
 (defun git-review---enable-mode ()
-  "Enable filename appropriate mode."
-  (when-let* ((mode (thread-last auto-mode-alist
-                                 (seq-find (lambda (it)
-                                             (string-match-p (car it)
-                                                             (git-review--current-file))))
-                                 (cdr))))
-    (funcall mode))
-  (git-review-minor-mode))
+  "Deduce mode to use for base-revision if Emacs failed to do so."
+  (with-current-buffer git-review-base-revision-buffer
+    (when (eq major-mode 'fundamental-mode)
+      (funcall
+       (with-current-buffer git-review-current-revision-buffer
+         major-mode)))))
 
 (defun git-review--restore-overlays ()
   "Restore altered overlays."
