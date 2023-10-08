@@ -717,6 +717,19 @@
       (git-review-start-review))))
 
 ;;;###autoload
+(defun git-review-branch ()
+  "Review the current branch."
+  (interactive)
+  (let ((default-directory (project-root (project-current))))
+    (setq git-review--config `(:project-root ,default-directory
+                                             :change-id ,(lambda () (git-review--commit-hash))
+                                             :patchset ,(lambda () 1)
+                                             :wip t
+                                             :branch t))
+    (git-review--initialize-review))
+  (git-review-start-review))
+
+;;;###autoload
 (defun git-review-commit ()
   "Review the current commit."
   (interactive)
@@ -1021,6 +1034,12 @@ Optionally if MULTIPLE is t use `completing-read-multiple'."
     (and (string-match git-review-project-name-regexp url)
          (match-string 1 url))))
 
+(defun git-review--commit-merge-base-hash ()
+  "Return the merge base commit hash."
+  (with-temp-buffer
+    (call-process-shell-command "git merge-base master HEAD" nil t)
+    (string-trim-right (buffer-string))))
+
 (defun git-review--commit-parent-hash ()
   "Return parent commit hash."
   (with-temp-buffer
@@ -1308,7 +1327,9 @@ Optionally provide a BASE-PATCHSET-NUMBER."
                                  (equal (plist-get it :number) patchset-number))
                                (plist-get git-review--change :patchsets))))
       (setq git-review--patchset patchset)
-    (setq git-review--patchset (git-review--create-patchset patchset-number)))
+    (setq git-review--patchset (if (plist-get git-review--config :branch)
+                                   (git-review--create-branch-patchset patchset-number)
+                                 (git-review--create-commit-patchset patchset-number))))
   (setq git-review--change
         (plist-put git-review--change :current-patchset
                    (plist-get git-review--patchset :number)))
@@ -1369,7 +1390,18 @@ Optionally provide a BASE-PATCHSET-NUMBER."
     (git-review--add-patchset-files files)
     files))
 
-(defun git-review--create-patchset (number)
+(defun git-review--create-branch-patchset (number)
+  "Create patch-set with NUMBER."
+  (let ((patchset `(:commit-hash ,(git-review--commit-hash)
+                                 :parent-hash ,(git-review--commit-merge-base-hash)
+                                 :subject ,(git-review--commit-subject)
+                                 :author ,(git-review--commit-author)
+                                 :number ,number)))
+    (unless (plist-get git-review--config :wip)
+      (git-review--add-patchset patchset))
+    patchset))
+
+(defun git-review--create-commit-patchset (number)
   "Create patch-set with NUMBER."
   (let ((patchset `(:commit-hash ,(git-review--commit-hash)
                                  :parent-hash ,(git-review--commit-parent-hash)
