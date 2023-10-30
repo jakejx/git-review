@@ -710,8 +710,7 @@
   (when change
     (let* ((default-directory (project-root (project-current))))
       (setq git-review--config
-            `(:project-root ,(project-root
-                              (project-current))))
+            `(:project-root ,(vc-root-dir)))
       (git-review--initialize-review (plist-get change :id)
                                      (plist-get change :current-patchset))
       (git-review-start-review))))
@@ -720,7 +719,7 @@
 (defun git-review-branch ()
   "Review the current branch."
   (interactive)
-  (let ((default-directory (project-root (project-current))))
+  (let ((default-directory (vc-root-dir)))
     (setq git-review--config `(:project-root ,default-directory
                                              :change-id ,(lambda () (git-review--commit-hash))
                                              :patchset ,(lambda () 1)
@@ -733,7 +732,7 @@
 (defun git-review-commit ()
   "Review the current commit."
   (interactive)
-  (let ((default-directory (project-root (project-current))))
+  (let ((default-directory (vc-root-dir)))
     (setq git-review--config `(:project-root ,default-directory
                                              :change-id ,(lambda () (git-review--commit-hash))
                                              :patchset ,(lambda () 1)
